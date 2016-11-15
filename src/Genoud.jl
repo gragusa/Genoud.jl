@@ -1,4 +1,4 @@
-module Genud
+module Genoud
 
 using MathProgBase
 using OptimMPB
@@ -9,11 +9,11 @@ using StatsBase
 
 const FLOAT = eltype(1.0)
 
-const XNM = ["x₁", "x₂", "x₃", "x₄", "x₅", "x₆", "x₇", "x₈ ", "x₉", "x₁₀",
-            "x₁₁", "x₁₂", "x₁₃", "x₁₄", "x₁₅", "x₁₆", "x₁₇", "x₁₈ ", "x₁₉", "x₂₀",
-            "x₂₁", "x₂₂", "x₂₃", "x₂₄", "x₂₅", "x₂₆", "x₂₇", "x₂₈ ", "x₂₉", "x₃₀",
-            "x₃₁", "x₃₂", "x₃₃", "x₃₄", "x₃₅", "x₃₆", "x₃₇", "x₃₈ ", "x₃₉", "x₄₀",
-            "x₄₁", "x₄₂", "x₄₃", "x₄₄", "x₄₅", "x₄₆", "x₄₇", "x₄₈ ", "x₄₉", "x₅₀"]
+const XNM = ["X₁", "X₂", "X₃", "X₄", "X₅", "X₆", "X₇", "X₈ ", "X₉", "X₁₀",
+            "X₁₁", "X₁₂", "X₁₃", "X₁₄", "X₁₅", "X₁₆", "X₁₇", "X₁₈ ", "X₁₉", "X₂₀",
+            "X₂₁", "X₂₂", "X₂₃", "X₂₄", "X₂₅", "X₂₆", "X₂₇", "X₂₈ ", "X₂₉", "X₃₀",
+            "X₃₁", "X₃₂", "X₃₃", "X₃₄", "X₃₅", "X₃₆", "X₃₇", "X₃₈ ", "X₃₉", "X₄₀",
+            "X₄₁", "X₄₂", "X₄₃", "X₄₄", "X₄₅", "X₄₆", "X₄₇", "X₄₈ ", "X₄₉", "X₅₀"]
 
 immutable Domain{T}
   m::Matrix{T}
@@ -43,13 +43,12 @@ end
     wait_generations::Int64 = 10
     hard_generation_limit::Bool = true
     f_tol::Float64 = 0.001
-    boundary_enforcement::Int64 = 0
+    boundary_enforcement::Bool = false
     data_type_int::Bool = false
     print_level::Int64 = 2
     optim_burnin::Int64 = 0
+    hessian::Bool = false
 end
-
-
 
 function Base.sum(op::GenoudOperators)
   s = 0
@@ -82,6 +81,11 @@ end
 
 _rand(a,b) = a + (b-a)*rand()
 
+
+isinbound(x::Float, j, d::Domain) = x <= d.m[j,2] && x >= d.m[j,1]
+
+
+
 cloning(x) = x
 
 function uniform_mut!(x, d::Domain)
@@ -99,13 +103,18 @@ function boundary_mut!(x, d::Domain)
   x
 end
 
-function nonuniform_mut!(x, d::Domain, generation, max_generation)
+function nonuniform_mut!(x, d::Domain, generation, max_generation, boundary_enforcement)
   B = .5
   k = length(d)
   j = rand(1:k)
   p = rand()*(1-generation/(max_generation+1))^B
   r = rand(1:2)
-  x[j] = (1-p)*x[j]+p*d.m[j,r]
+  mx = (1-p)*x[j]+p*d.m[j,r]
+  if boundary_enforcement
+    x[j] = ifelse(isinbound(mx, j, d), mx, x[j])
+  else
+    x[j] = mx
+  end
   x
 end
 
@@ -131,14 +140,19 @@ function simple_cross(x, d::Domain)
   z
 end
 
-function whole_mut!(x, d::Domain, generation, max_generation)
+function whole_mut!(x, d::Domain, generation, max_generation, boundary_enforcement)
   B = .5
   k = length(d)
-  #z = Array{FLOAT}(k)
+  ## TODO: Check for boundary condition
   for j in 1:k
     p = rand()*(1-generation/max_generation)^B
     r = rand(1:2)
-    x[j] = (1-p)*x[j]+p*d.m[j,r]
+    mx = (1-p)*x[j]+p*d.m[j,r]
+    if boundary_enforcement
+      x[j] = ifelse(isinbound(mx, j, d), mx, x[j])
+    else
+      x[j] = mx
+    end
   end
   x
 end
@@ -152,7 +166,14 @@ function heuristic_cross(x, d::Domain)
     for s = 1:k
       z[s] = p*(x[s,1]-x[s,2]) + x[s,1]
     end
-    if z ∈ d || attempts > 10
+    if z ∈ d
+      break
+    end
+    if attempts > 10
+      j = rand(1:2)
+      for s = 1:k
+        z[s] = x[s, j]
+      end
       break
     end
     attempts += 1
@@ -195,14 +216,7 @@ function initialpopulation(d::Domain, n::Int)
     X
 end
 
-function claw(xx)
- x = xx[1]
- (0.46*(normpdf(-1.0,2.0/3.0, x) + normpdf(1.0,2.0/3.0, x)) +
- (1.0/300.0)*(normpdf(-0.5,.01, x) + normpdf(-1.0,.01, x) + normpdf(-1.5,.01, x)) +
- (7.0/300.0)*(normpdf(0.5,.07, x) + normpdf(1.0,.07, x) + normpdf(1.5,.07, x)))
-end
-
-function mutation(population, fitness, smplidx, fitidx, idx, domains::Domain, generation, max_generation)
+function mutation(population, fitness, smplidx, fitidx, idx, domains::Domain, generation, max_generation, boundary_enforcement)
   offspring = copy(population)
   k, sizepop = size(population)
   ## Perform cloning
@@ -232,7 +246,7 @@ function mutation(population, fitness, smplidx, fitidx, idx, domains::Domain, ge
     for j = 1:k
       offspring[j,i] = population[j,i]
     end
-    nonuniform_mut!(view(offspring, :, i), domains, generation, max_generation)
+    nonuniform_mut!(view(offspring, :, i), domains, generation, max_generation, boundary_enforcement)
   end
   ## Polytope crossover
   for i in idx[4]+1:idx[5]
@@ -247,7 +261,7 @@ function mutation(population, fitness, smplidx, fitidx, idx, domains::Domain, ge
     for j = 1:k
       offspring[j,i] = population[j,i]
     end
-    whole_mut!(view(offspring, :, i), domains, generation, max_generation)
+    whole_mut!(view(offspring, :, i), domains, generation, max_generation, boundary_enforcement)
   end
 
   ## Heuristic mutation
@@ -308,34 +322,8 @@ function print_generation_info(generation, fitness, population, bestindiv, bestf
   println("")
 end
 
-
-# function genoud(fcn, initial_x; gr! = identity, optimize_best = true,
-#   method::Optim.Optimizer = Optim.BFGS(),
-#   sense::Symbol = :Min, sizepop = 1000,
-#   domains::Domain = Domain(initial_x),
-#   opts::GenoudOptions = GenoudOptions(),
-#   op::GenoudOperators = GenoudOperators())
-
-function genoud(fcn, initial_x, gr! = identity, sizepop::Int64 = 1000,sense::Symbol = :Min,
-  optimize_best = true,
-  method::Optim.Optimizer = Optim.BFGS(),
-
-  domains::Domain = Domain(initial_x),
-  opts::GenoudOptions = GenoudOptions(),
-  op::GenoudOperators = GenoudOperators())
-
-
-  ## Check
-  checkdomain(domains, initial_x)
-
-  ## Parameters
-  σ = sense == :Min ? 1 : -1
-
-  k = length(domains)
-
-  func(x) = σ*fcn(x)
-
-  ## Calculate operator rate
+function splits(op::GenoudOperators, sizepop)
+  ## Calculate operator rate and indexes
   rate = operator_rate(op)
   op_split = round(Int, rate*sizepop)
   ## Oprator that need positive population
@@ -356,21 +344,40 @@ function genoud(fcn, initial_x, gr! = identity, sizepop::Int64 = 1000,sense::Sym
   elseif sum_split > sizepop
     op_split[1] -= (sum_split + 1) - sizepop
   end
-  idx = cumsum(op_split)[1:end-1]
+  cumsum(op_split)[1:end-1]
+end
 
+function genoud(fcn, initial_x; sizepop = 1000, sense::Symbol = :Min,
+  optimize_best = true, gr! = identity, domains::Domain = Domain(initial_x),
+  opts::GenoudOptions = GenoudOptions(),
+  op::GenoudOperators = GenoudOperators())
+
+  ## Check
+  checkdomain(domains, initial_x)
+
+  ## Number of parameters
+  k = length(domains)
+  ## Get splits for operator application
+  idx = splits(op, sizepop)
   ## Options
   f_tol = opts.f_tol
   max_generations = opts.max_generations
   hard_generation_limit = opts.hard_generation_limit
   wait_generations = opts.wait_generations
   optim_burnin = opts.optim_burnin
+  print_level = opts.print_level
+  boundary_enforcement = opts.boundary_enforcement
+  ## Set the solver
+  ## If boundary_enforcement == true use L-BFGS with bounds
+  optimizer = boundary_enforcement ? LBFGS() : BFGS()
+
   # Initialize population
   population  = initialpopulation(domains, sizepop)  ## (k × sizepop)
   offspring   = similar(population)                  ##
-  fitness     = zeros(sizepop)
+  fitness     = zeros(sizepop)                       ## Need to experiment with pmap
   smplidx     = collect(1:sizepop)
 
-  print_problem_info(op, opts, sizepop, domains, sense)
+  print_level > 0 && print_problem_info(op, opts, sizepop, domains, sense)
 
   ## Calculate initial fitness value
   for i in 1:sizepop
@@ -395,13 +402,11 @@ function genoud(fcn, initial_x, gr! = identity, sizepop::Int64 = 1000,sense::Sym
     ## with probability proportional to Q(1-Q)^r, where r is the rank
     #selectionprob = exp(-fitness/2)./Base.sum(exp(-fitness/2),1)
     #sample!(1:sizepop, WeightVec(selectionprob), smplidx)
-    sample!(1:sizepop, smplidx)
-    #selectionprob = 1.
+    #sample!(1:sizepop, smplidx)
+    #population = population[:, smplidx]
 
-
-    population = population[:, smplidx]
     population = mutation(population, fitness, smplidx, fitidx, idx,
-                          domains, generation, max_generations)
+    domains, generation, max_generations, boundary_enforcement)
     population[:, end] = bestindiv
 
     for i in 1:sizepop
@@ -415,17 +420,17 @@ function genoud(fcn, initial_x, gr! = identity, sizepop::Int64 = 1000,sense::Sym
 
     generation += 1
     ## Apply BFGS to best individual
-    if optim_burnin < generation
-      out = Optim.optimize(func, gr!, vec(current_bestindiv), BFGS())
+    if optim_burnin < generation + 1 && optimize_best
+      out = Optim.optimize(func, gr!, vec(current_bestindiv), optimizer)
       population[:,maxidx] = out.minimum
-      fitness[maxidx]    = out.f_minimum
+      fitness[maxidx] = out.f_minimum
       if out.f_minimum < current_bestfitns
         bestindiv = copy(out.minimum)
         bestfitns = out.f_minimum
       end
     end
 
-    print_generation_info(generation, fitness, population, bestindiv, bestfitns)
+    print_level > 0 && print_generation_info(generation, fitness, population, bestindiv, bestfitns)
 
     fittol = abs(current_bestfitns - bestfitns)
     ## Store tolerance level
@@ -441,6 +446,7 @@ function genoud(fcn, initial_x, gr! = identity, sizepop::Int64 = 1000,sense::Sym
       if generation > max_generations
         break
       elseif generation == max_generations
+        print_level > 1 && warn("Increasing max number of generation from "*string(max_generations)*" to "*string(max_generations+10))
         generation += 10
       end
       continue
@@ -450,11 +456,11 @@ function genoud(fcn, initial_x, gr! = identity, sizepop::Int64 = 1000,sense::Sym
         break
       end
     end
+    ## Resample population
+    sample!(1:sizepop, smplidx)
+    population = population[:, smplidx]
   end
-
-
   return bestindiv, bestfitns, fitvals, indvals
-
 end
 
 
