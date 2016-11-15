@@ -14,11 +14,13 @@ const XNM = ["X₁", "X₂", "X₃", "X₄", "X₅", "X₆", "X₇", "X₈ ", "X
             "X₁₁", "X₁₂", "X₁₃", "X₁₄", "X₁₅", "X₁₆", "X₁₇", "X₁₈ ", "X₁₉", "X₂₀",
             "X₂₁", "X₂₂", "X₂₃", "X₂₄", "X₂₅", "X₂₆", "X₂₇", "X₂₈ ", "X₂₉", "X₃₀",
             "X₃₁", "X₃₂", "X₃₃", "X₃₄", "X₃₅", "X₃₆", "X₃₇", "X₃₈ ", "X₃₉", "X₄₀",
-            "X₄₁", "X₄₂", "X₄₃", "X₄₄", "X₄₅", "X₄₆", "X₄₇", "X₄₈ ", "X₄₉", "X₅₀"]
+            "X₄₁", "X₄₂", "X₄₃", "X₄₄", "X₄₅", "X₄₆", "X₄₇", "X₄₈ ", "X₄₉", "X₅₀",
+            "X₅₁", "X₅₂", "X₅₃", "X₅₄", "X₅₅", "X₅₆", "X₅₇", "X₅₈ ", "X₅₉", "X₆₀",
+            "X₆₁", "X₆₂", "X₆₃", "X₆₄", "X₆₅", "X₆₆", "X₆₇", "X₆₈ ", "X₆₉", "X₇₀"]
 
 immutable Domain{T}
   m::Matrix{T}
-  p::Matrix{T}
+  p::Matrix{T}   ## Padding for boundary mutation
 end
 
 Base.length(d::Domain) = size(d.m, 1)
@@ -32,8 +34,6 @@ function Domain{T}(x::Array{T, 2})
   n = length(x)
   Domain(x, [√eps(T)*ones(T, n) -√eps(T)*ones(T, n)])
 end
-
-
 
 @with_kw type GenoudOperators
     cloning::Int64 = 50
@@ -315,10 +315,10 @@ function print_problem_info(op, opts, sizepop, d, sense)
   end
 end
 
-function print_generation_info(generation, fitness, population, bestindiv, bestfitns)
+function print_generation_info(generation, fitness, population, bestindiv, bestfitns, ς)
   print_with_color(:blue, "Generation ", string(generation)*"\n")
-  print_with_color(:cyan, "Fitness (best)...:   "*string(bestfitns)*"\n")
-                  println("  mean...........:   ", mean(fitness))
+  print_with_color(:cyan, "Fitness (best)...:   "*string(ς*bestfitns)*"\n")
+                  println("  mean...........:   ", ς*mean(fitness))
                   println("  variance.......:   ", var(fitness))
                   println("  unique.........:   ", length(unique(fitness)))
   meanindiv = mean(population, 2)
@@ -380,7 +380,7 @@ function genoud(fcn, initial_x; sizepop = 1000, sense::Symbol = :Min,
   boundary_enforcement = opts.boundary_enforcement
   pmix = opts.pmix
   ## Set the solver
-  σ = sense == :Min ? 1 : -1
+  σ = sense == :Min ? 1  : -1
   func(x) = σ*fcn(x)
   function grad!(x, stor)
     gr!(x, stor)
@@ -411,7 +411,7 @@ function genoud(fcn, initial_x; sizepop = 1000, sense::Symbol = :Min,
   push!(indvals, bestindiv)
 
   generation = 0
-  print_generation_info(generation, fitness, population, bestindiv, bestfitns)
+  print_generation_info(generation, fitness, population, bestindiv, bestfitns, σ)
 
   while true
     ## Selection step
@@ -454,7 +454,7 @@ function genoud(fcn, initial_x; sizepop = 1000, sense::Symbol = :Min,
       end
     end
 
-    print_level > 0 && print_generation_info(generation, fitness, population, bestindiv, bestfitns)
+    print_level > 0 && print_generation_info(generation, fitness, population, bestindiv, bestfitns, σ)
 
     fittol = abs(current_bestfitns - bestfitns)
     ## Store tolerance level
@@ -491,7 +491,9 @@ function genoud(fcn, initial_x; sizepop = 1000, sense::Symbol = :Min,
     population = population[:, smplidx]
     population[:, 1] = bestindiv
   end
-  return bestindiv, bestfitns, fitvals, indvals
+  stor = Array{FLOAT}(k)
+  gr!(bestindiv, stor)
+  return bestindiv, σ*bestfitns, σ.*fitvals, indvals, stor
 end
 
 function Base.isapprox(x::Array{FLOAT, 1}, y::FLOAT)
