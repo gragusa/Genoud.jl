@@ -7,6 +7,7 @@ using StatsFuns
 using StatsBase
 # package code goes here
 
+const rtol  = sqrt(eps(1.0))
 const FLOAT = eltype(1.0)
 
 const XNM = ["X₁", "X₂", "X₃", "X₄", "X₅", "X₆", "X₇", "X₈ ", "X₉", "X₁₀",
@@ -42,12 +43,13 @@ end
     max_generations::Int64 = 100
     wait_generations::Int64 = 10
     hard_generation_limit::Bool = true
-    f_tol::Float64 = 0.001
+    f_tol::FLOAT = 0.001
     boundary_enforcement::Bool = false
     data_type_int::Bool = false
     print_level::Int64 = 2
     optim_burnin::Int64 = 0
     hessian::Bool = false
+    pmix::FLOAT = 0.8
 end
 
 function Base.sum(op::GenoudOperators)
@@ -82,7 +84,7 @@ end
 _rand(a,b) = a + (b-a)*rand()
 
 
-isinbound(x::Float, j, d::Domain) = x <= d.m[j,2] && x >= d.m[j,1]
+isinbound(x::FLOAT, j, d::Domain) = x <= d.m[j,2] && x >= d.m[j,1]
 
 
 
@@ -197,7 +199,7 @@ function Base.Random.rand!(X, d::Domain)
   u = rand(size(X, 2))
   for j in 1:k
     copy!(view(X, j, :), d.m[j,1] + (d.m[j,2]-d.m[j,1]).*u)
-    u = rand(size(X, 2))
+    rand!(u)
   end
   X
 end
@@ -322,7 +324,7 @@ function print_generation_info(generation, fitness, population, bestindiv, bestf
   println("")
 end
 
-function splits(op::GenoudOperators, sizepop)
+function splits(op::GenoudOperators, sizepop, k)
   ## Calculate operator rate and indexes
   rate = operator_rate(op)
   op_split = round(Int, rate*sizepop)
@@ -358,7 +360,7 @@ function genoud(fcn, initial_x; sizepop = 1000, sense::Symbol = :Min,
   ## Number of parameters
   k = length(domains)
   ## Get splits for operator application
-  idx = splits(op, sizepop)
+  idx = splits(op, sizepop, k)
   ## Options
   f_tol = opts.f_tol
   max_generations = opts.max_generations
@@ -367,7 +369,16 @@ function genoud(fcn, initial_x; sizepop = 1000, sense::Symbol = :Min,
   optim_burnin = opts.optim_burnin
   print_level = opts.print_level
   boundary_enforcement = opts.boundary_enforcement
+  pmix = opts.pmix
   ## Set the solver
+  σ = sense == :Min ? 1 : -1
+  func(x) = σ*fcn(x)
+  function grad!(x, stor)
+    gr!(x, stor)
+    scale!(stor, σ)
+    stor
+  end
+
   ## If boundary_enforcement == true use L-BFGS with bounds
   optimizer = boundary_enforcement ? LBFGS() : BFGS()
 
@@ -381,7 +392,7 @@ function genoud(fcn, initial_x; sizepop = 1000, sense::Symbol = :Min,
 
   ## Calculate initial fitness value
   for i in 1:sizepop
-    fitness[i] = func(population[i])
+    fitness[i] = func(population[:,i])
   end
   fitidx = sortperm(fitness, rev = false)
   minidx = fitidx[1]
@@ -390,7 +401,7 @@ function genoud(fcn, initial_x; sizepop = 1000, sense::Symbol = :Min,
 
   fittols = [0.0]
   fitvals = [bestfitns]
-  indvals = Array{Array{Float64, 1}, 1}(0)
+  indvals = Array{Array{FLOAT, 1}, 1}(0)
   push!(indvals, bestindiv)
 
   generation = 0
@@ -406,11 +417,12 @@ function genoud(fcn, initial_x; sizepop = 1000, sense::Symbol = :Min,
     #population = population[:, smplidx]
 
     population = mutation(population, fitness, smplidx, fitidx, idx,
-    domains, generation, max_generations, boundary_enforcement)
-    population[:, end] = bestindiv
+                          domains, generation, max_generations, boundary_enforcement)
+    ## Make sure the best individuals from previus generation survive
+    population[:, 1] = bestindiv
 
     for i in 1:sizepop
-      fitness[i] = func(population[i])
+      fitness[i] = func(population[:,i])
     end
     fitidx = sortperm(fitness, rev = false)
     minidx = fitidx[1]
@@ -421,12 +433,12 @@ function genoud(fcn, initial_x; sizepop = 1000, sense::Symbol = :Min,
     generation += 1
     ## Apply BFGS to best individual
     if optim_burnin < generation + 1 && optimize_best
-      out = Optim.optimize(func, gr!, vec(current_bestindiv), optimizer)
-      population[:,maxidx] = out.minimum
-      fitness[maxidx] = out.f_minimum
+      out = Optim.optimize(func, grad!, vec(current_bestindiv), optimizer)
+      population[:,maxidx-1] = out.minimum
+      fitness[maxidx-1] = out.f_minimum
       if out.f_minimum < current_bestfitns
-        bestindiv = copy(out.minimum)
-        bestfitns = out.f_minimum
+        current_bestindiv = copy(out.minimum)
+        current_bestfitns = out.f_minimum
       end
     end
 
@@ -446,22 +458,35 @@ function genoud(fcn, initial_x; sizepop = 1000, sense::Symbol = :Min,
       if generation > max_generations
         break
       elseif generation == max_generations
-        print_level > 1 && warn("Increasing max number of generation from "*string(max_generations)*" to "*string(max_generations+10))
-        generation += 10
+        if hard_generation_limit
+          warn("Number of max generation limit reached, but the fitness value is still changing")
+          break
+        else
+          print_level > 1 && warn("Number of max generation limit reached, increasing max number of generation from "*string(max_generations)*" to "*string(max_generations+10))
+          generation += 10
+        end
       end
-      continue
     else
       ## Below tolerance
-      if length(fitvals) >= wait_generations && all(fitvals[end-wait_generations+2:end] .== fitvals[end-wait_generations+1])
+      if length(fitvals) >= wait_generations && fitvals[end-wait_generations+2:end] ≈ fitvals[end-wait_generations+1]
         break
       end
     end
     ## Resample population
-    sample!(1:sizepop, smplidx)
+    fitidx = sortperm(fitness, rev = false)
+    smplprob = pmix.^fitidx
+    sample!(1:sizepop, WeightVec(smplprob), smplidx)
     population = population[:, smplidx]
+    population[:, 1] = bestindiv
   end
   return bestindiv, bestfitns, fitvals, indvals
 end
 
+function Base.isapprox(x::Array{FLOAT, 1}, y::FLOAT)
+  for j in eachindex(x)
+    isapprox(x[j], y) || return false
+  end
+  true
+end
 
 end  #module
