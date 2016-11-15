@@ -18,14 +18,22 @@ const XNM = ["X₁", "X₂", "X₃", "X₄", "X₅", "X₆", "X₇", "X₈ ", "X
 
 immutable Domain{T}
   m::Matrix{T}
+  p::Matrix{T}
 end
 
 Base.length(d::Domain) = size(d.m, 1)
 
 function Domain{T}(x::Array{T, 1})
   n = length(x)
-  Domain([x.-10*ones(T, n) x.+10*ones(T, n)])
+  Domain([x.-10*ones(T, n) x.+10*ones(T, n)], [√eps(T)*ones(T, n) -√eps(T)*ones(T, n)])
 end
+
+function Domain{T}(x::Array{T, 2})
+  n = length(x)
+  Domain(x, [√eps(T)*ones(T, n) -√eps(T)*ones(T, n)])
+end
+
+
 
 @with_kw type GenoudOperators
     cloning::Int64 = 50
@@ -101,7 +109,7 @@ function boundary_mut!(x, d::Domain)
   k = length(d)
   j = rand(1:k)
   r = rand(1:2)
-  x[j] = d.m[j,r]
+  x[j] = d.m[j,r] + d.p[j,r]
   x
 end
 
@@ -350,7 +358,8 @@ function splits(op::GenoudOperators, sizepop, k)
 end
 
 function genoud(fcn, initial_x; sizepop = 1000, sense::Symbol = :Min,
-  optimize_best = true, gr! = identity, domains::Domain = Domain(initial_x),
+  domains::Domain = Domain(initial_x), optimize_best = true, gr! = identity,
+  optimizer::Optim.Optimizer = Optim.BFGS(),
   opts::GenoudOptions = GenoudOptions(),
   op::GenoudOperators = GenoudOperators())
 
@@ -378,9 +387,6 @@ function genoud(fcn, initial_x; sizepop = 1000, sense::Symbol = :Min,
     scale!(stor, σ)
     stor
   end
-
-  ## If boundary_enforcement == true use L-BFGS with bounds
-  optimizer = boundary_enforcement ? LBFGS() : BFGS()
 
   # Initialize population
   population  = initialpopulation(domains, sizepop)  ## (k × sizepop)
@@ -433,7 +439,13 @@ function genoud(fcn, initial_x; sizepop = 1000, sense::Symbol = :Min,
     generation += 1
     ## Apply BFGS to best individual
     if optim_burnin < generation + 1 && optimize_best
-      out = Optim.optimize(func, grad!, vec(current_bestindiv), optimizer)
+      if boundary_enforcement
+          out = Optim.optimize(DifferentiableFunction(func, grad!),
+                               vec(current_bestindiv), domains.m[:,1], domains.m[:,2],
+                               Fminbox(), optimizer = typeof(optimizer))
+      else
+        out = Optim.optimize(func, grad!, vec(current_bestindiv), optimizer)
+      end
       population[:,maxidx-1] = out.minimum
       fitness[maxidx-1] = out.f_minimum
       if out.f_minimum < current_bestfitns
