@@ -1,5 +1,4 @@
 module Genoud
-
 using MathProgBase
 using OptimMPB
 using Parameters
@@ -22,25 +21,25 @@ const XNM = ["X₁", "X₂", "X₃", "X₄", "X₅", "X₆", "X₇", "X₈ ", "X
 const NUMBER_OF_TRIES_HC = 1000
 const DEBUG = false
 
-immutable Domain{T <: Number}
-  m::Matrix{T}
-  p::Matrix{T}   ## Padding for boundary mutation
+immutable Domain
+  m::Array{Float64, 2}
+  p::Array{Float64, 2}   ## Padding for boundary mutation
 end
 
-Base.length(d::Domain) = size(d.m, 1)
+Base.length(d::Domain) = size(d.m, 1)::Int64
 
-function Domain(x::Array{FLOAT, 1})
+function Domain(x::Array{Float64, 1})
   n = length(x)
-  Domain([x.-10*ones(FLOAT, n) x.+10*ones(FLOAT, n)],
-         [√eps(FLOAT)*ones(FLOAT, n) -√eps(FLOAT)*ones(FLOAT, n)])
+  Domain([x.-10*ones(Float64, n) x.+10*ones(Float64, n)],
+         [√eps(Float64)*ones(Float64, n) -√eps(Float64)*ones(Float64, n)])
 end
 
-function Domain(x::Array{FLOAT, 2})
+function Domain(x::Array{Float64, 2})
   n = length(x)
-  Domain(x, [√eps(FLOAT)*ones(FLOAT, n) -√eps(FLOAT)*ones(FLOAT, n)])
+  Domain(x, [√eps(Float64)*ones(Float64, n) -√eps(Float64)*ones(Float64, n)])
 end
 
-@with_kw immutable GenoudOperators{T <: Int}
+@with_kw immutable GenoudOperators{T}
     cloning::T = 50
     uniform_mut::T = 50
     boundary_mut::T = 50
@@ -84,8 +83,6 @@ type GenoudOutput
   opts::GenoudOptions
 end
 
-
-
 function Base.sum(op::GenoudOperators)
   s = 0
   for fnm in fieldnames(op)
@@ -96,7 +93,7 @@ end
 
 function operator_rate(op)
   fnm = fieldnames(op)
-  rate = Array{FLOAT}(length(fnm))
+  rate = Array{Float64}(length(fnm))
   for f in enumerate(fnm)
     rate[f[1]] = getfield(op, f[2])
   end
@@ -118,21 +115,21 @@ end
 _rand(a,b) = a + (b-a)*rand()
 
 
-isinbound(x::FLOAT, j, d::Domain) = x <= d.m[j,2] && x >= d.m[j,1]
+isinbound(x::Float64, j, d::Domain) = x <= d.m[j,2] && x >= d.m[j,1]
 
 
 
 cloning(x) = x
 
 function uniform_mut!(x, d::Domain)
-  k = length(d)
+  k = length(d)::Int64
   j = rand(1:k)
   x[j] = _rand(d.m[j,1], d.m[j,2])
   x
 end
 
 function boundary_mut!(x, d::Domain)
-  k = length(d)
+  k = length(d)::Int64
   j = rand(1:k)
   r = rand(1:2)
   x[j] = d.m[j,r] + d.p[j,r]
@@ -140,7 +137,7 @@ function boundary_mut!(x, d::Domain)
 end
 
 function nonuniform_mut!(x, bmix, d::Domain, generation, max_generations, boundary_enforcement)
-  k = length(d)
+  k = length(d)::Int64
   j = rand(1:k)
   p = rand()*(1-generation/(max_generations+1))^bmix
   r = rand(1:2)
@@ -154,7 +151,7 @@ function nonuniform_mut!(x, bmix, d::Domain, generation, max_generations, bounda
 end
 
 function polytope_cross(x, d::Domain)
-  k = length(d)
+  k = length(d)::Int64
   m = max(2, k)
   p   = rand(m)
   p   = p./sum(p)
@@ -166,7 +163,7 @@ function polytope_cross(x, d::Domain)
 end
 
 function simple_cross(x, d::Domain)
-  k = length(d)
+  k = length(d)::Int64
   p = 0.5
   z = zeros(k)
   for s in 1:k, j in 1:2
@@ -176,7 +173,7 @@ function simple_cross(x, d::Domain)
 end
 
 function whole_mut!(x, bmix, d::Domain, generation, max_generations, boundary_enforcement)
-  k = length(d)
+  k = length(d)::Int64
   for j in 1:k
     p = rand()*(1-generation/max_generations)^bmix
     r = rand(1:2)
@@ -191,8 +188,8 @@ function whole_mut!(x, bmix, d::Domain, generation, max_generations, boundary_en
 end
 
 function heuristic_cross(x, d::Domain)
-  k = length(d)
-  z = Array{FLOAT}(k)
+  k = length(d)::Int64
+  z = Array{Float64}(k)
   attempts = 0
   while true
     p = rand()
@@ -216,7 +213,7 @@ end
 
 function Base.Random.rand(d::Domain)
   k = length(d)
-  u = Array{FLOAT}(k)
+  u = Array{Float64}(k)
   rand!(u)
   for j in 1:k
     u[j] = d.m[j,1] + (d.m[j,2]-d.m[j,1])*u[j]
@@ -243,7 +240,7 @@ end
 
 function initialpopulation(d::Domain, n::Int)
     k = length(d)
-    X = Array{FLOAT}(k, n)
+    X = Array{Float64}(k, n)
     rand!(X, d)
     X
 end
@@ -402,7 +399,7 @@ function _describe(x)
 end
 
 
-function genoud(fcn, initial_x::Array{FLOAT, 1};
+function genoud(fcn, initial_x::Array{Float64, 1};
   sizepop::Int = 1000, sense::Symbol = :Min,
   domains::Domain = Domain(initial_x),
   optimize_best::Bool = true, gr!::Function = identity,
@@ -428,8 +425,8 @@ function genoud(fcn, initial_x::Array{FLOAT, 1};
   boundary_enforcement = opts.boundary_enforcement
   initial_selection = opts.initial_selection
   check_gradient = opts.check_gradient
-  bmix = opts.bmix
-  pmix = opts.pmix
+  bmix = opts.bmix::Float64
+  pmix = opts.pmix::Float64
   ## Set the solver
   σ = sense == :Min ? 1  : -1
   func(x) = σ*fcn(x)
@@ -449,7 +446,7 @@ function genoud(fcn, initial_x::Array{FLOAT, 1};
   =#
   ftols = [0.0]
   gtol  = 0.0
-  grx   = Array{FLOAT}(k)
+  grx   = Array{Float64}(k)
   #=
   ## Print problem info
   =#
@@ -468,8 +465,9 @@ function genoud(fcn, initial_x::Array{FLOAT, 1};
   #=
   ## Resample population
   =#
+  smplprob = Array{Float64}(sizepop)
   if initial_selection
-    smplprob = pmix.*((1-pmix).^(fitidx-1))
+    smplprob .= pmix.*((1-pmix).^(fitidx-1))
     sample!(1:sizepop, WeightVec(smplprob), smplidx)
     population = population[:, smplidx]
     fitness = fitness[smplidx]
@@ -488,7 +486,7 @@ function genoud(fcn, initial_x::Array{FLOAT, 1};
     gr!(bestindiv, grx)
     gtols = [sumabs(grx)]
   else
-    gtols = Array{FLOAT}(0)
+    gtols = Array{Float64}(0)
   end
 
   DEBUG && println("\n Best individual")
@@ -497,7 +495,8 @@ function genoud(fcn, initial_x::Array{FLOAT, 1};
   DEBUG && show(bestfitns)
   DEBUG && check_gradient && println("Gradient")
   DEBUG && check_gradient && show(bestfitns)
-  print_generation_info(generation, fitness, population, bestindiv, bestfitns, print_level, σ)
+
+  print_level >0 && print_generation_info(generation, fitness, population, bestindiv, bestfitns, print_level, σ)
 
   while true
     #=
@@ -515,7 +514,7 @@ function genoud(fcn, initial_x::Array{FLOAT, 1};
     #=
     Rank fitness and get best individuals
     =#
-    fitidx = sortperm(fitness, rev = false)
+    sortperm!(fitidx, fitness, rev = false)
     minidx = fitidx[1]
     maxidx = fitidx[end]
     current_bestindiv =  population[:, minidx]
@@ -605,8 +604,11 @@ function genoud(fcn, initial_x::Array{FLOAT, 1};
     end
 
     ## Resample population
-    fitidx = sortperm(fitness, rev = false)
-    smplprob = pmix.*((1-pmix).^(fitidx-1))
+    sortperm!(fitidx, fitness, rev = false)
+    smplprob .= pmix.*((1-pmix).^(fitidx-1))
+    # broadcast!(-, fitidx, fitidx, 1)
+    # broadcast!(^, smplprob, 1-pmix, fitidx)
+    # broadcast!(*, smplprob, smplprob, pmix)
     sample!(1:sizepop, WeightVec(smplprob), smplidx)
     #sample!(1:sizepop,  smplidx)
     population = population[:, smplidx]
@@ -670,7 +672,7 @@ function Base.show(io::IO, r::GenoudOutput)
   @printf io "   * Number of Generations: %s\n" generations(r)
 end
 
-function Base.isapprox(x::Array{FLOAT, 1}, y::FLOAT)
+function Base.isapprox(x::Array{Float64, 1}, y::Float64)
   for j in eachindex(x)
     isapprox(x[j], y) || return false
   end
