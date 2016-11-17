@@ -546,7 +546,7 @@ function genoud(fcn, initial_x::Array{Float64, 1};
       end
       catch
         DEBUG && println("SOLVER FAILED")
-        print_level > 0 && print_with_color(:red, "Solver on best individual failed")
+        print_level > 0 && print_with_color(:red, "Solver on best individual failed\n")
       end
     end
 
