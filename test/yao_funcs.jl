@@ -82,7 +82,7 @@ testfuns = (  x -> sumabs2(x),
                    end,
               x -> begin
                     k = length(x)
-                    -sum(x.^2 - 10.*cos(2*π*x) + 10)
+                    sum(- 10.*cos(2*π*x) + 10 + x.^2 )
                    end,
               x -> begin
                     k = length(x)
