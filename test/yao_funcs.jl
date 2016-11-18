@@ -214,13 +214,13 @@ sols = []
 parms = ([100, 5000], [200, 5000], [100, 10000], [200, 10000])
 
 for p = 1:4
-    ngens = parms[p][1]
+    mgens = parms[p][1]
     spop = parms[p][2]
     for j = 1:51
-        Genoud.GenoudOptions(f_tol = 1e-06,
-        max_generations = mgens,
-        pmix = .5,
-        boundary_enforcement = true, print_level = 0)
+        gopt = Genoud.GenoudOptions(f_tol = 1e-06,
+                                    max_generations = mgens,
+                                    pmix = .5,
+                                    boundary_enforcement = true, print_level = 0)
         for i = 1:23
             println("Solving problem ", i, " out of 23")
             x0 = xmin_testfuns[i]
