@@ -135,8 +135,6 @@ xmin_testfuns  = (zeros(30), zeros(30), zeros(30), zeros(30), ones(30),
                   [0.201, 0.150, 0.477, 0.275, 0.311, 0.657],
                   [4,4,4,4.], [4,4,4,4.], [4,4,4,4.])
 
-
-
 nargs_testfuns = [repeat([30], inner = 13); 2; 4; 2; 2; 2; 4; 6; 4; 4; 4]
 
 bnds_testfuns = ((-100.,100), (-10.,10), (-100.,100), (-100.,100),
@@ -209,91 +207,43 @@ using Calculus
 using ForwardDiff
 using Genoud
 
-times = zeros(23, 51, 3)
-fstar = zeros(23, 51, 3)
+times = zeros(23, 51, 4)
+fstar = zeros(23, 51, 4)
 sols = []
 
-for j = 1:51
-    for i = 1:23
-        println("Solving problem ", i, " out of 23")
-        x0 = xmin_testfuns[i]
-        isa(x0, Tuple) && (x0 = x0[1])
-        k = length(x0)
-        cs = min(10, k)
-        if differentiable[i]
-            times[i, j, 1] = @elapsed out = Genoud.genoud(testfuns[i],
-                                                      zeros(nargs_testfuns[i]),
-                                                      sizepop = 5000,
-            gr! = (x, store) -> ForwardDiff.gradient!(store, testfuns[i], x, Chunk{cs}()),
-            opts = Genoud.GenoudOptions(f_tol = 1e-06,
-            max_generations = 100,
-            pmix = .5, boundary_enforcement = true, print_level = 0),
-            sense = :Min, domains = Genoud.Domain(bnds[i]));
-        else
-            times[i, j, 1] = @elapsed out = Genoud.genoud(testfuns[i], zeros(nargs_testfuns[i]), sizepop = 5000,
-            gr! = (x, store) -> store[:] = Calculus.gradient(testfuns[i], x),
-            opts = Genoud.GenoudOptions(f_tol = 1e-06, max_generations = 100,
-            pmix = .5, boundary_enforcement = true, print_level = 0),
-            sense = :Min,
-            domains = Genoud.Domain(bnds[i]));
-        end
-        fstar[i,j, 1] = out.bestfitns
-    end
-end
+parms = ([100, 5000], [200, 5000], [100, 10000], [200, 10000])
 
-for j = 1:51
-    for i = 1:23
-        println("Solving problem ", i, " out of 23")
-        x0 = xmin_testfuns[i]
-        isa(x0, Tuple) && (x0 = x0[1])
-        k = length(x0)
-        cs = min(10, k)
-        if differentiable[i]
-            times[i, j, 2] = @elapsed out = Genoud.genoud(testfuns[i],
-                                                      zeros(nargs_testfuns[i]),
-                                                      sizepop = 5000,
-            gr! = (x, store) -> ForwardDiff.gradient!(store, testfuns[i], x, Chunk{cs}()),
-            opts = Genoud.GenoudOptions(f_tol = 1e-06,
-            max_generations = 200,
-            pmix = .5, boundary_enforcement = true, print_level = 0),
-            sense = :Min, domains = Genoud.Domain(bnds[i]));
-        else
-            times[i, j, 2] = @elapsed out = Genoud.genoud(testfuns[i], zeros(nargs_testfuns[i]), sizepop = 5000,
-            gr! = (x, store) -> store[:] = Calculus.gradient(testfuns[i], x),
-            opts = Genoud.GenoudOptions(f_tol = 1e-06, max_generations = 200,
-            pmix = .5, boundary_enforcement = true, print_level = 0),
-            sense = :Min,
-            domains = Genoud.Domain(bnds[i]));
+for p = 1:4
+    ngens = parms[p][1]
+    spop = parms[p][2]
+    for j = 1:51
+        Genoud.GenoudOptions(f_tol = 1e-06,
+        max_generations = mgens,
+        pmix = .5,
+        boundary_enforcement = true, print_level = 0)
+        for i = 1:23
+            println("Solving problem ", i, " out of 23")
+            x0 = xmin_testfuns[i]
+            isa(x0, Tuple) && (x0 = x0[1])
+            k = length(x0)
+            cs = min(10, k)
+            gdom = Genoud.Domain(bnds[i])
+            if differentiable[i]
+                times[i, j, p] = @elapsed out = Genoud.genoud(testfuns[i],
+                zeros(nargs_testfuns[i]),
+                sizepop = spop,
+                gr! = (x, store) -> ForwardDiff.gradient!(store, testfuns[i], x, Chunk{cs}()),
+                opts = gopt, sense = :Min, domains = gdom)
+            else
+                times[i, j, p] = @elapsed out = Genoud.genoud(testfuns[i],
+                zeros(nargs_testfuns[i]),
+                sizepop = spop,
+                gr! = (x, store) -> store[:] = Calculus.gradient(testfuns[i], x),
+                opts = gopt,
+                sense = :Min,
+                domains = gdom;
+            end
+            fstar[i, j, p] = out.bestfitns
         end
-        fstar[i, j, 2] = out.bestfitns
-    end
-end
-
-for j = 1:51
-    for i = 1:23
-        println("Solving problem ", i, " out of 23")
-        x0 = xmin_testfuns[i]
-        isa(x0, Tuple) && (x0 = x0[1])
-        k = length(x0)
-        cs = min(10, k)
-        if differentiable[i]
-            times[i, j, 3] = @elapsed out = Genoud.genoud(testfuns[i],
-                                                      zeros(nargs_testfuns[i]),
-                                                      sizepop = 10000,
-            gr! = (x, store) -> ForwardDiff.gradient!(store, testfuns[i], x, Chunk{cs}()),
-            opts = Genoud.GenoudOptions(f_tol = 1e-06,
-            max_generations = 100,
-            pmix = .5, boundary_enforcement = true, print_level = 0),
-            sense = :Min, domains = Genoud.Domain(bnds[i]));
-        else
-            times[i, j, 3] = @elapsed out = Genoud.genoud(testfuns[i],
-            zeros(nargs_testfuns[i]), sizepop = 10000,
-            gr! = (x, store) -> store[:] = Calculus.gradient(testfuns[i], x),
-            opts = Genoud.GenoudOptions(f_tol = 1e-06, max_generations = 100,
-            pmix = .5, boundary_enforcement = true, print_level = 0),
-            sense = :Min,
-            domains = Genoud.Domain(bnds[i]));
-        end
-        fstar[i, j, 3] = out.bestfitns
     end
 end
