@@ -578,7 +578,7 @@ function genoud(fcn, initial_x::Array{Float64, 1};
         Check exit conditions
         =#
         if ftol <= f_tol && gtol <= g_tol
-            if length(fvals) >= wait_generations && fvals[end-wait_generations+2:end] ≈ fvals[end-wait_generations+1]
+            if length(fvals) >= wait_generations && maximum(abs(fvals[end-wait_generations+2:end] - fvals[end-wait_generations+1])) <= f_tol
                 break
             end
         end
