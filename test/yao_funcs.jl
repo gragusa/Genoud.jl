@@ -241,7 +241,7 @@ for p = 1:4
                 gr! = (x, store) -> store[:] = Calculus.gradient(testfuns[i], x),
                 opts = gopt,
                 sense = :Min,
-                domains = gdom;
+                domains = gdom)
             end
             fstar[i, j, p] = out.bestfitns
         end
