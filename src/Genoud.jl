@@ -548,11 +548,6 @@ function genoud(fcn, initial_x::Array{Float64, 1};
             end
         end
         #=
-        Carry over best of previous generation
-        =#
-        population[:, 1] = bestindiv
-        fitness[1] = bestfitns
-        #=
         Print info
         =#
         print_level > 0 && print_generation_info(generation, fitness, population, bestindiv, bestfitns, print_level, σ)
@@ -604,6 +599,12 @@ function genoud(fcn, initial_x::Array{Float64, 1};
         smplprob .= pmix.*((1-pmix).^(fitidx-1))
         sample!(1:sizepop, WeightVec(smplprob), smplidx)
         population = population[:, smplidx]
+        #=
+        Carry over best of previous generation
+        =#
+        population[:, 1] = bestindiv
+        fitness[1] = bestfitns
+
     end
     bestgen = findmin(fvals)[2]-1
     GenoudOutput(bestindiv,
