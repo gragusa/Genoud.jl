@@ -1,9 +1,12 @@
 module Genoud
-using MathProgBase
-using OptimMPB
+#using MathProgBase
+#using OptimMPB
 using Parameters
 using StatsFuns
 using StatsBase
+using Reexport
+using Optim
+import Optim: converged, f_converged, g_converged, f_tol, g_tol
 # package code goes here
 
 const rtol  = sqrt(eps(1.0))
@@ -65,7 +68,8 @@ end
     hessian::B = false
     pmix::F = 0.5
     bmix::F = 6.0
-    initial_selection::B = true
+    initial_selection::B = false
+    bfgs_iterations::T = 75
 end
 
 type GenoudOutput
@@ -392,7 +396,7 @@ end
 
 
 function genoud(fcn, initial_x::Array{Float64, 1};
-    sizepop::Int = 1000, sense::Symbol = :Min,
+    sizepop::Int = 5000, sense::Symbol = :Min,
     domains::Domain = Domain(initial_x),
     optimize_best::Bool = true, gr!::Function = identity,
     optimizer::Optim.Optimizer = Optim.BFGS(),
@@ -453,7 +457,8 @@ function genoud(fcn, initial_x::Array{Float64, 1};
     for i in 1:sizepop
         fitness[i] = func(population[:,i])
     end
-    fitidx = sortperm(fitness, rev = false)
+    fitidx = StatsBase.competerank(fitness)
+    permidx = sortperm(fitidx)
     #=
     ## Resample population
     =#
@@ -464,13 +469,12 @@ function genoud(fcn, initial_x::Array{Float64, 1};
         population = population[:, smplidx]
         fitness = fitness[smplidx]
         DEBUG && Base.show(_describe(smplprob))
-        copy!(fitidx, 1:sizepop)
     end
     #=
     ## Best individual
     =#
-    bestfitns =  fitness[fitidx[1]]
-    bestindiv =  population[:, fitidx[1]]
+    bestfitns, idxmin = findmin(fitness)
+    bestindiv =  population[:, idxmin]
     xvals = [bestindiv]
     fvals = [bestfitns]
 
@@ -495,8 +499,8 @@ function genoud(fcn, initial_x::Array{Float64, 1};
         Mutate population
         =#
         population = mutation(population, fitness, smplidx, fitidx, idx,
-        domains, generation, max_generations,
-        boundary_enforcement, bmix)
+                              domains, generation, max_generations,
+                              boundary_enforcement, bmix)
         #=
         Calculate fitness
         =#
@@ -506,11 +510,10 @@ function genoud(fcn, initial_x::Array{Float64, 1};
         #=
         Rank fitness and get best individuals
         =#
-        sortperm!(fitidx, fitness, rev = false)
-        minidx = fitidx[1]
-        maxidx = fitidx[end]
+        sortperm!(permidx, fitness, rev = false)
+        StatsBase.competerank!(fitidx, fitness, permidx)
+        current_bestfitns, minidx = findmin(fitness)
         current_bestindiv =  population[:, minidx]
-        current_bestfitns =  fitness[minidx]
 
         generation += 1
         #=
@@ -522,16 +525,19 @@ function genoud(fcn, initial_x::Array{Float64, 1};
                 DEBUG && show(current_bestindiv)
                 if boundary_enforcement
                     out = Optim.optimize(DifferentiableFunction(func, grad!),
-                    vec(current_bestindiv), domains.m[:,1], domains.m[:,2],
-                    Fminbox(), optimizer = BFGS, iterations = 500)
+                                         vec(current_bestindiv),
+                                         domains.m[:,1], domains.m[:,2],
+                                         Fminbox(), optimizer = BFGS,
+                                         iterations = opts.bfgs_iterations)
                 else
-                    out = Optim.optimize(func, grad!, vec(current_bestindiv), optimizer)
+                    out = Optim.optimize(func, grad!, vec(current_bestindiv), optimizer,
+                                         OptimizationOptions(iterations = opts.bfgs_iterations))
                 end
                 DEBUG && println("SOLVER OUTPUT")
                 DEBUG && show(out)
 
-                population[:,maxidx-1] = out.minimum
-                fitness[maxidx-1] = out.f_minimum
+                # population[:,end] = out.minimum
+                # fitness[end] = out.f_minimum
                 if out.f_minimum < current_bestfitns
                     current_bestindiv = copy(out.minimum)
                     current_bestfitns = out.f_minimum
@@ -541,7 +547,6 @@ function genoud(fcn, initial_x::Array{Float64, 1};
                 print_level > 0 && print_with_color(:red, "Solver on best individual failed\n")
             end
         end
-
         #=
         Carry over best of previous generation
         =#
@@ -551,7 +556,6 @@ function genoud(fcn, initial_x::Array{Float64, 1};
         Print info
         =#
         print_level > 0 && print_generation_info(generation, fitness, population, bestindiv, bestfitns, print_level, σ)
-
         #=
         Calculate tolarances
         =#
@@ -573,12 +577,11 @@ function genoud(fcn, initial_x::Array{Float64, 1};
         =#
         bestfitns = copy(current_bestfitns)
         bestindiv = copy(current_bestindiv)
-
         #=
         Check exit conditions
         =#
         if ftol <= f_tol && gtol <= g_tol
-            if length(fvals) >= wait_generations && maximum(abs(fvals[end-wait_generations+2:end] - fvals[end-wait_generations+1])) <= f_tol
+            if length(fvals) >= wait_generations && maximum(abs(fvals[end-wait_generations+2:end] - fvals[end-wait_generations+1])) <= f_tol^2
                 break
             end
         end
@@ -587,7 +590,7 @@ function genoud(fcn, initial_x::Array{Float64, 1};
             break
         elseif generation == max_generations
             if hard_generation_limit
-                warn("Number of max generation limit reached, but the fitness value is still changing")
+                print_level > 1 && warn("Number of max generation limit reached, but the fitness value is still changing")
                 break
             else
                 print_level > 1 && warn("Number of max generation limit reached, increasing max number of generation from "*string(max_generations)*" to "*string(max_generations+10))
@@ -596,15 +599,11 @@ function genoud(fcn, initial_x::Array{Float64, 1};
         end
 
         ## Resample population
-        sortperm!(fitidx, fitness, rev = false)
+        sortperm!(permidx, fitness, rev = false)
+        StatsBase.competerank!(fitidx, fitness, permidx)
         smplprob .= pmix.*((1-pmix).^(fitidx-1))
-        # broadcast!(-, fitidx, fitidx, 1)
-        # broadcast!(^, smplprob, 1-pmix, fitidx)
-        # broadcast!(*, smplprob, smplprob, pmix)
         sample!(1:sizepop, WeightVec(smplprob), smplidx)
-        #sample!(1:sizepop,  smplidx)
         population = population[:, smplidx]
-        #population[:, 1] = bestindiv
     end
     bestgen = findmin(fvals)[2]-1
     GenoudOutput(bestindiv,
@@ -620,16 +619,16 @@ function genoud(fcn, initial_x::Array{Float64, 1};
     op,
     opts)
 end
-#
-function converged(r::GenoudOutput)
+
+Optim.f_converged(r::GenoudOutput) = last(r.ftols) <= r.opts.f_tol
+Optim.g_converged(r::GenoudOutput) = last(r.gtols) <= r.opts.g_tol
+
+Optim.f_tol(r::GenoudOutput) = r.opts.f_tol
+Optim.g_tol(r::GenoudOutput) = r.opts.f_tol
+
+function Optim.converged(r::GenoudOutput)
     f_converged(r) || r.opts.check_gradient && last(r.gtols) <= r.opts.g_tol
 end
-
-f_converged(r::GenoudOutput) = last(r.ftols) <= r.opts.f_tol
-g_converged(r::GenoudOutput) = last(r.gtols) <= r.opts.g_tol
-
-f_tol(r::GenoudOutput) = r.opts.f_tol
-g_tol(r::GenoudOutput) = r.opts.f_tol
 
 generations(r::GenoudOutput) = length(r.ftols) - 1
 #

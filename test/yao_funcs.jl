@@ -57,7 +57,7 @@ end
 
 ## Functions definition
 
-differentiable = (true, false, true, false, true, false, true, true, true, true,
+differentiable = (true, false, true, false, true, false, true, false, true, true,
                   [true for j = 1:13]...)
 
 testfuns = (  x -> sumabs2(x),
@@ -207,16 +207,19 @@ using Calculus
 using ForwardDiff
 using Genoud
 
-times = zeros(23, 51, 4)
-fstar = zeros(23, 51, 4)
+
+nruns = 5
+
+times = zeros(23, nruns, 4)
+fstar = zeros(23, nruns, 4)
 sols = []
 
-parms = ([100, 5000], [200, 5000], [100, 10000], [200, 10000])
+parms = ([30, 5000], [30, 10000], [100, 5000], [100, 10000])
 
 for p = 1:4
     mgens = parms[p][1]
     spop = parms[p][2]
-    for j = 1:51
+    for j = 1:nruns
         gopt = Genoud.GenoudOptions(f_tol = 1e-06,
                                     max_generations = mgens,
                                     pmix = .5,
@@ -236,7 +239,7 @@ for p = 1:4
                 opts = gopt, sense = :Min, domains = gdom)
             else
                 times[i, j, p] = @elapsed out = Genoud.genoud(testfuns[i],
-                zeros(nargs_testfuns[i]),
+                zeros(nargs_testfuns[i]), 
                 sizepop = spop,
                 gr! = (x, store) -> store[:] = Calculus.gradient(testfuns[i], x),
                 opts = gopt,
