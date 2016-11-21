@@ -208,7 +208,7 @@ using ForwardDiff
 using Genoud
 
 
-nruns = 5
+nruns = 51
 
 times = zeros(23, nruns, 4)
 fstar = zeros(23, nruns, 4)
@@ -239,7 +239,7 @@ for p = 1:4
                 opts = gopt, sense = :Min, domains = gdom)
             else
                 times[i, j, p] = @elapsed out = Genoud.genoud(testfuns[i],
-                zeros(nargs_testfuns[i]), 
+                zeros(nargs_testfuns[i]),
                 sizepop = spop,
                 gr! = (x, store) -> store[:] = Calculus.gradient(testfuns[i], x),
                 opts = gopt,
