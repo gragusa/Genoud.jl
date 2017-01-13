@@ -1,3 +1,4 @@
+__precompile__(true)
 module Genoud
 #using MathProgBase
 #using OptimMPB
@@ -5,7 +6,7 @@ using Parameters
 using StatsFuns
 using StatsBase
 using Reexport
-using Optim
+@reexport using Optim
 import Optim: converged, f_converged, g_converged, f_tol, g_tol
 # package code goes here
 
@@ -42,7 +43,7 @@ end
 
 Base.length(d::Domain) = size(d.m, 1)::Int64
 
-@with_kw immutable GenoudOperators{T}
+@with_kw immutable Operators{T}
     cloning::T = 50
     uniform_mut::T = 50
     boundary_mut::T = 50
@@ -54,7 +55,7 @@ Base.length(d::Domain) = size(d.m, 1)::Int64
     localmin_cross::T = 0
 end
 
-@with_kw immutable GenoudOptions{T, F, B}
+@with_kw immutable Options{T, F, B}
     max_generations::T = 100
     wait_generations::T = 10
     hard_generation_limit::B = true
@@ -83,11 +84,11 @@ type GenoudOutput
     bestgen
     sense
     d::Domain
-    op::GenoudOperators
-    opts::GenoudOptions
+    op::Operators
+    opts::Options
 end
 
-function Base.sum(op::GenoudOperators)
+function Base.sum(op::Operators)
     s = 0
     for fnm in fieldnames(op)
         s += getfield(op, fnm)
@@ -364,7 +365,7 @@ function print_generation_info(generation, fitness, population, bestindiv, bestf
     end
 end
 
-function splits(op::GenoudOperators, sizepop, k)
+function splits(op::Operators, sizepop, k)
     ## Calculate operator rate and indexes
     rate = operator_rate(op)
     op_split = round(Int, rate*sizepop)
@@ -400,8 +401,9 @@ function genoud(fcn, initial_x::Array{Float64, 1};
     domains::Domain = Domain(initial_x),
     optimize_best::Bool = true, gr!::Function = identity,
     optimizer::Optim.Optimizer = Optim.BFGS(),
-    opts::GenoudOptions = GenoudOptions(),
-    op::GenoudOperators = GenoudOperators())
+    opts::Options = Genoud.Options(),
+    op::Operators = Genoud.Operators(),
+    optimizer_o = Optim.Options())
 
     ## Check
     checkdomain(domains, initial_x)
@@ -426,11 +428,15 @@ function genoud(fcn, initial_x::Array{Float64, 1};
     ## Set the solver
     σ = sense == :Min ? 1  : -1
     func(x) = σ*fcn(x)
+
     function grad!(x, stor)
-        gr!(x, stor)
-        scale!(stor, σ)
-        stor
+            gr!(x, stor)
+            scale!(stor, σ)
+            stor
     end
+
+    analytic_deriv = isa(gr!, typeof(Base.identity)) ? false : true
+
 
     # Initialize population
     population  = initialpopulation(domains, sizepop)  ## (k × sizepop)
@@ -485,11 +491,11 @@ function genoud(fcn, initial_x::Array{Float64, 1};
         gtols = Array{Float64}(0)
     end
 
-    DEBUG && println("\n Best individual")
+    DEBUG && println("\n Best individual:\n")
     DEBUG && Base.show(bestindiv)
-    DEBUG && println("Best fitness")
+    DEBUG && println("Best fitness:\n")
     DEBUG && show(bestfitns)
-    DEBUG && check_gradient && println("Gradient")
+    DEBUG && check_gradient && println("Gradient:\n")
     DEBUG && check_gradient && show(bestfitns)
 
     print_level >0 && print_generation_info(generation, fitness, population, bestindiv, bestfitns, print_level, σ)
@@ -521,29 +527,36 @@ function genoud(fcn, initial_x::Array{Float64, 1};
         =#
         if optim_burnin < generation + 1 && optimize_best
             try
-                DEBUG && println("Running BFGS on")
+                DEBUG && println("Running BFGS on:\n")
                 DEBUG && show(current_bestindiv)
                 if boundary_enforcement
-                    out = Optim.optimize(DifferentiableFunction(func, grad!),
-                                         vec(current_bestindiv),
-                                         domains.m[:,1], domains.m[:,2],
-                                         Fminbox(), optimizer = BFGS,
-                                         iterations = opts.bfgs_iterations)
+                    if analytic_deriv
+                        out = Optim.optimize(DifferentiableFunction(func, grad!), vec(current_bestindiv),
+                        domains.m[:,1], domains.m[:,2], Fminbox(), optimizer = LBFGS,
+                        optimizer_o = optimizer_o)
+                    else
+                        out = Optim.optimize(DifferentiableFunction(func), vec(current_bestindiv), domains.m[:,1], domains.m[:,2],
+                        Fminbox(), optimizer = LBFGS, optimizer_o = optimizer_o)
+                    end
+
                 else
-                    out = Optim.optimize(func, grad!, vec(current_bestindiv), optimizer,
-                                         OptimizationOptions(iterations = opts.bfgs_iterations))
+                    if analytic_deriv
+                        out = Optim.optimize(func, grad!, vec(current_bestindiv), optimizer, optimizer_o)
+                    else
+                        out = Optim.optimize(func, vec(current_bestindiv), optimizer, optimizer_o)
+                    end
                 end
                 DEBUG && println("SOLVER OUTPUT")
                 DEBUG && show(out)
 
                 # population[:,end] = out.minimum
                 # fitness[end] = out.f_minimum
-                if out.f_minimum < current_bestfitns
-                    current_bestindiv = copy(out.minimum)
-                    current_bestfitns = out.f_minimum
+                if out.minimum < current_bestfitns
+                    current_bestindiv = copy(out.minimizer)
+                    current_bestfitns = out.minimum
                 end
-            catch
-                DEBUG && println("SOLVER FAILED")
+            catch exception
+                DEBUG && (println("SOLVER FAILED WITH:\n"); println(exception))
                 print_level > 0 && print_with_color(:red, "Solver on best individual failed\n")
             end
         end
@@ -668,4 +681,7 @@ function Base.isapprox(x::Array{Float64, 1}, y::Float64)
     true
 end
 
+bestindiv(g::Genoud.GenoudOutput) = g.bestindiv
+bestfitns(g::Genoud.GenoudOutput) = g.bestfitns
+bestgen(g::Genoud.GenoudOutput) = g.bestgen
 end  #module
