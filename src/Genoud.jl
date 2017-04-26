@@ -531,11 +531,11 @@ function genoud(fcn, initial_x::Array{Float64, 1};
                 DEBUG && show(current_bestindiv)
                 if boundary_enforcement
                     if analytic_deriv
-                        out = Optim.optimize(DifferentiableFunction(func, grad!), vec(current_bestindiv),
+                        out = Optim.optimize(OnceDifferentiable(func, grad!), vec(current_bestindiv),
                         domains.m[:,1], domains.m[:,2], Fminbox(), optimizer = LBFGS,
                         optimizer_o = optimizer_o)
                     else
-                        out = Optim.optimize(DifferentiableFunction(func), vec(current_bestindiv), domains.m[:,1], domains.m[:,2],
+                        out = Optim.optimize(OnceDifferentiable(func), vec(current_bestindiv), domains.m[:,1], domains.m[:,2],
                         Fminbox(), optimizer = LBFGS, optimizer_o = optimizer_o)
                     end
 
