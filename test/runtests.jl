@@ -12,32 +12,32 @@ end
 
 gr!(x, stor) = ForwardDiff.gradient!(stor, claw, x)
 
-opts = Genoud.Options(print_level = 0)
+opt = Genoud.Options(print_level = 0)
 
 srand(1)
 
 @testset "No optimization" begin
     ## No best individual optimization
-    out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimize_best = false, opts = opts)
+    out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimize_best = false, opt = opt)
     @test Genoud.bestfitns(out) ≈ 0.41131232675083473
     @test Genoud.bestindiv(out) ≈ [0.9995032620966703]
 end
 
 @testset "Numeric Derivative - Finite Differences" begin
     ## Best individual optimization - Numerical gradient - No boundary enforcement - BFGS
-    out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimize_best = true, opts = opts)
+    out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimize_best = true, opt = opt)
     @test Genoud.bestfitns(out) ≈ 0.41131232675083473
     @test Genoud.bestindiv(out) ≈ [0.9995032620968612]
 
     ## Best individual optimization - Numerical gradient - No boundary enforcement - BFGS
-    out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimize_best = true, optimizer = Optim.LBFGS(), opts = opts)
+    out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimize_best = true, optimizer = Optim.LBFGS(), opt = opt)
     @test Genoud.bestfitns(out) ≈ 0.41131232675083473
     @test Genoud.bestindiv(out) ≈ [0.9995032620968612]
 
 
     ## Best individual optimization - Numerical gradient - boundary enforcement
     out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimize_best = true,
-                        opts = Genoud.Options(boundary_enforcement = true), opts = opts)
+                        opt = Genoud.Options(boundary_enforcement = true), opt = opt)
 
     @test Genoud.bestfitns(out) ≈ 0.41131232675083473
     @test Genoud.bestindiv(out) ≈ [0.9995032620966703]
@@ -46,20 +46,20 @@ end
 @testset "Numeric Derivative - Automatic Differences" begin
     ## Best individual optimization - Numerical gradient - No boundary enforcement - BFGS
     out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimize_best = true,
-                        optimizer_o = Optim.Options(autodiff = true), opts = opts)
+                        optimizer_o = Optim.Options(autodiff = true), opt = opt)
     @test Genoud.bestfitns(out) ≈ 0.41131232675083473
     @test Genoud.bestindiv(out) ≈ [0.9995032620968612]
 
     ## Best individual optimization - Numerical gradient - No boundary enforcement - BFGS
     out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimize_best = true,
-                        optimizer = Optim.LBFGS(), optimizer_o = Optim.Options(autodiff = true), opts = opts)
+                        optimizer = Optim.LBFGS(), optimizer_o = Optim.Options(autodiff = true), opt = opt)
     @test Genoud.bestfitns(out) ≈ 0.41131232675083473
     @test Genoud.bestindiv(out) ≈ [0.9995032620968612]
 
 
     ## Best individual optimization - Numerical gradient - boundary enforcement
     out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimize_best = true,
-                        opts = Genoud.Options(boundary_enforcement = true), opts = opts)
+                        opt = Genoud.Options(boundary_enforcement = true), opt = opt)
 
     @test Genoud.bestfitns(out) ≈ 0.41131232675083473
     @test Genoud.bestindiv(out) ≈ [0.9995032620966703]
@@ -68,19 +68,19 @@ end
 
 @testset "Analytic Derivative" begin
     ## Best individual optimization - Numerical gradient - No boundary enforcement - BFGS
-    out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimize_best = true, gr! = gr!, opts = opts)
+    out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimize_best = true, gr! = gr!, opt = opt)
     @test Genoud.bestfitns(out) ≈ 0.41131232675083473
     @test Genoud.bestindiv(out) ≈ [0.9995032620968612]
 
     ## Best individual optimization - Numerical gradient - No boundary enforcement - BFGS
-    out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimize_best = true, gr! = gr!, optimizer = Optim.LBFGS(), opts = opts)
+    out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimize_best = true, gr! = gr!, optimizer = Optim.LBFGS(), opt = opt)
     @test Genoud.bestfitns(out) ≈ 0.41131232675083473
     @test Genoud.bestindiv(out) ≈ [0.9995032620968612]
 
 
     ## Best individual optimization - Numerical gradient - boundary enforcement
     out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimize_best = true, gr! = gr!,
-                        opts = Genoud.Options(boundary_enforcement = true), opts = opts)
+                        opt = Genoud.Options(boundary_enforcement = true), opt = opt)
 
     @test Genoud.bestfitns(out) ≈ 0.41131232675083473
     @test Genoud.bestindiv(out) ≈ [0.9995032620966703]

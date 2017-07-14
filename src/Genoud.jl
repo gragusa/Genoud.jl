@@ -312,7 +312,6 @@ function mutation(population, fitness, smplidx, fitidx, idx, domains::Domain, ge
     return offspring
 end
 
-
 function print_problem_info(op, opts, sizepop, d, sense)
     k = length(d)
     println("Domains:")
@@ -368,7 +367,7 @@ end
 function splits(op::Operators, sizepop, k)
     ## Calculate operator rate and indexes
     rate = operator_rate(op)
-    op_split = round(Int, rate*sizepop)
+    op_split = round.(Int, rate*sizepop)
     ## Oprator that need positive population
     op_split[6] = isodd(op_split[6]) ? (op_split[1] -= 1; op_split[6] + 1) : op_split[6]
     op_split[8] = isodd(op_split[8]) ? (op_split[1] -= 1; op_split[8] + 1) : op_split[8]
@@ -398,33 +397,33 @@ end
 
 function genoud(fcn, initial_x::Array{Float64, 1};
     sizepop::Int = 5000, sense::Symbol = :Min,
-    domains::Domain = Domain(initial_x),
+    domain::Domain = Domain(initial_x),
     optimize_best::Bool = true, gr!::Function = identity,
     optimizer::Optim.Optimizer = Optim.BFGS(),
-    opts::Options = Genoud.Options(),
-    op::Operators = Genoud.Operators(),
-    optimizer_o = Optim.Options())
+    opt::Options = Genoud.Options(),
+    operator_o::Operators = Genoud.Operators(),
+    optimizer_o::Optim.Options = Optim.Options())
 
     ## Check
-    checkdomain(domains, initial_x)
+    checkdomain(domain, initial_x)
 
     ## Number of parameters
-    k = length(domains)
+    k = length(domain)
     ## Get splits for operator application
-    idx = splits(op, sizepop, k)
+    idx = splits(operator_o, sizepop, k)
     ## Options
-    f_tol = opts.f_tol
-    g_tol = opts.g_tol
-    max_generations = opts.max_generations
-    hard_generation_limit = opts.hard_generation_limit
-    wait_generations = opts.wait_generations
-    optim_burnin = opts.optim_burnin
-    print_level = opts.print_level
-    boundary_enforcement = opts.boundary_enforcement
-    initial_selection = opts.initial_selection
-    check_gradient = opts.check_gradient
-    bmix = opts.bmix::Float64
-    pmix = opts.pmix::Float64
+    f_tol = opt.f_tol
+    g_tol = opt.g_tol
+    max_generations = opt.max_generations
+    hard_generation_limit = opt.hard_generation_limit
+    wait_generations = opt.wait_generations
+    optim_burnin = opt.optim_burnin
+    print_level = opt.print_level
+    boundary_enforcement = opt.boundary_enforcement
+    initial_selection = opt.initial_selection
+    check_gradient = opt.check_gradient
+    bmix = opt.bmix::Float64
+    pmix = opt.pmix::Float64
     ## Set the solver
     σ = sense == :Min ? 1  : -1
     func(x) = σ*fcn(x)
@@ -437,9 +436,8 @@ function genoud(fcn, initial_x::Array{Float64, 1};
 
     analytic_deriv = isa(gr!, typeof(Base.identity)) ? false : true
 
-
     # Initialize population
-    population  = initialpopulation(domains, sizepop)  ## (k × sizepop)
+    population  = initialpopulation(domain, sizepop)  ## (k × sizepop)
     offspring   = similar(population)                  ##
     fitness     = zeros(sizepop)                       ## Need to experiment with pmap
     smplidx     = collect(1:sizepop)
@@ -452,7 +450,7 @@ function genoud(fcn, initial_x::Array{Float64, 1};
     #=
     ## Print problem info
     =#
-    print_level > 0 && print_problem_info(op, opts, sizepop, domains, sense)
+    print_level > 0 && print_problem_info(operator_o, opt, sizepop, domain, sense)
     #=
     ## Set generation
     =#
@@ -471,7 +469,7 @@ function genoud(fcn, initial_x::Array{Float64, 1};
     smplprob = Array{Float64}(sizepop)
     if initial_selection
         smplprob .= pmix.*((1-pmix).^(fitidx-1))
-        sample!(1:sizepop, WeightVec(smplprob), smplidx)
+        sample!(1:sizepop, Weights(smplprob), smplidx)
         population = population[:, smplidx]
         fitness = fitness[smplidx]
         DEBUG && Base.show(_describe(smplprob))
@@ -505,7 +503,7 @@ function genoud(fcn, initial_x::Array{Float64, 1};
         Mutate population
         =#
         population = mutation(population, fitness, smplidx, fitidx, idx,
-                              domains, generation, max_generations,
+                              domain, generation, max_generations,
                               boundary_enforcement, bmix)
         #=
         Calculate fitness
@@ -532,10 +530,10 @@ function genoud(fcn, initial_x::Array{Float64, 1};
                 if boundary_enforcement
                     if analytic_deriv
                         out = Optim.optimize(OnceDifferentiable(func, grad!), vec(current_bestindiv),
-                        domains.m[:,1], domains.m[:,2], Fminbox(), optimizer = LBFGS,
+                        domain.m[:,1], domain.m[:,2], Fminbox(), optimizer = LBFGS,
                         optimizer_o = optimizer_o)
                     else
-                        out = Optim.optimize(OnceDifferentiable(func), vec(current_bestindiv), domains.m[:,1], domains.m[:,2],
+                        out = Optim.optimize(OnceDifferentiable(func), vec(current_bestindiv), domain.m[:,1], domain.m[:,2],
                         Fminbox(), optimizer = LBFGS, optimizer_o = optimizer_o)
                     end
 
@@ -589,7 +587,7 @@ function genoud(fcn, initial_x::Array{Float64, 1};
         Check exit conditions
         =#
         if ftol <= f_tol && gtol <= g_tol
-            if length(fvals) >= wait_generations && maximum(abs(fvals[end-wait_generations+2:end] - fvals[end-wait_generations+1])) <= f_tol^2
+            if length(fvals) >= wait_generations && maximum(abs.(fvals[end-wait_generations+2:end] - fvals[end-wait_generations+1])) <= f_tol^2
                 break
             end
         end
@@ -610,7 +608,7 @@ function genoud(fcn, initial_x::Array{Float64, 1};
         sortperm!(permidx, fitness, rev = false)
         StatsBase.competerank!(fitidx, fitness, permidx)
         smplprob .= pmix.*((1-pmix).^(fitidx-1))
-        sample!(1:sizepop, WeightVec(smplprob), smplidx)
+        sample!(1:sizepop, Weights(smplprob), smplidx)
         population = population[:, smplidx]
         #=
         Carry over best of previous generation
@@ -629,9 +627,9 @@ function genoud(fcn, initial_x::Array{Float64, 1};
     grx,
     bestgen,
     sense,
-    domains,
-    op,
-    opts)
+    domain,
+    operator_o,
+    opt)
 end
 
 Optim.f_converged(r::GenoudOutput) = last(r.ftols) <= r.opts.f_tol
