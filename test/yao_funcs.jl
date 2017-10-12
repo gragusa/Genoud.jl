@@ -60,13 +60,13 @@ end
 differentiable = (true, false, true, false, true, false, true, false, true, true,
                   [true for j = 1:13]...)
 
-testfuns = (  x -> sumabs2(x),
-              x -> sumabs(x) + prod(abs(x)),
+testfuns = (  x -> sum(abs2, x),
+              x -> sum(abs, x) + prod(abs.(x)),
               x -> begin
                     k = length(x)
-                    sum(map(i -> sumabs2(x[1:i]), 1:k))
+                    sum(map(i -> sum(abs2, x[1:i]), 1:k))
                   end,
-              x -> maximum(abs(x)),
+              x -> maximum(abs.(x)),
               x -> begin
                     k = length(x) - 1
                     sum(map(i -> 100*(x[i+1]-x[i]^2)^2 + (x[i]-1)^2, 1:k))
@@ -86,11 +86,11 @@ testfuns = (  x -> sumabs2(x),
                    end,
               x -> begin
                     k = length(x)
-                    -20*exp(-0.2*√(sumabs2(x)/k)) - exp(mean(cos(2*π.*x))) + 20 + e
+                    -20*exp(-0.2*√(sumabs2.(x)/k)) - exp(mean(cos(2*π.*x))) + 20 + e
                    end,
               x -> begin
                     k = length(x)
-                    sumabs2(x)/1000 - prod(cos(x./sqrt(collect(1:k)))) + 1.0
+                    sumabs2.(x)/1000 - prod(cos(x./sqrt(collect(1:k)))) + 1.0
                    end,
               x -> begin
                       k = length(x)
@@ -130,7 +130,7 @@ xmin_testfuns  = (zeros(30), zeros(30), zeros(30), zeros(30), ones(30),
                   zeros(30), zeros(30), zeros(30), -ones(30), ones(30),
                   [-31.98, -31.98], [0.1928, 0.1908, 0.1231, 0.1358],
                   ([0.08983, -0.7126], [-0.8983, 0.7126]),
-                  ([-3.142, 2.275], [3.142, 2.275], [9.425, 2.475]),
+                  ([-3.142, 12.275], [3.142, 2.275], [9.425, 2.475]),
                   [0, -1], [0.114, 0.556, 0.852],
                   [0.201, 0.150, 0.477, 0.275, 0.311, 0.657],
                   [4,4,4,4.], [4,4,4,4.], [4,4,4,4.])
