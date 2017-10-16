@@ -1,4 +1,4 @@
-#__precompile__(true)
+__precompile__(true)
 module Genoud
 #using MathProgBase
 #using OptimMPB
@@ -405,15 +405,29 @@ end
 
 NonDifferentiable(f::Function, initial_x::Vector) = NonDifferentiable(f, float(initial_x))
 
-type Genoud_MPB <: MathProgBase.AbstractNLPEvaluator end
 
+
+struct Genoud_MPB{T, F} <: MathProgBase.AbstractNLPEvaluator 
+    f::T
+    g!::F
+end
+
+Genoud_MPB(d::OnceDifferentiable) = Genoud_MPB(d.f, d.g!)
+
+MathProgBase.features_available(g::Genoud_MPB) = [:Grad]
 function MathProgBase.initialize(d::Genoud_MPB, requested_features::Vector{Symbol})
     for feat in requested_features
         if !(feat in [:Grad])
             error("Unsupported feature $feat")
         end
     end
-end
+end 
+MathProgBase.jac_structure(g::Genoud_MPB) = Int[],Int[]
+MathProgBase.eval_jac_g(g::Genoud_MPB, J, x) = nothing
+MathProgBase.eval_f(g::Genoud_MPB, x) = g.f(x)
+MathProgBase.eval_grad_f(g::Genoud_MPB, gr, x) = g.g!(gr, x)    
+
+genoud(d::NLSolversBase.AbstractObjective, sizepop::Int64, domain::Domain; kwargs...) = genoud(d, sizepop, domain.m[:,1], domain.m[:,2]; kwargs...)
 
 function genoud(d::OnceDifferentiable, 
                 sizepop::Int64, 
@@ -421,45 +435,44 @@ function genoud(d::OnceDifferentiable,
                 uvar::Vector;
                 sense::Symbol = :Min,
                 solver::MathProgBase.SolverInterface.AbstractMathProgSolver = Ipopt.IpoptSolver(print_level=0), 
-                kwargs...)
-    
-    MathProgBase.features_available(g::Genoud_MPB) = [:Grad]
-    MathProgBase.eval_f(g::Genoud_MPB, x) = d.f(x)
-    MathProgBase.eval_grad_f(g::Genoud_MPB, gr, x) = d.g!(gr, x)
-    MathProgBase.jac_structure(g::Genoud_MPB) = Int[],Int[]
-    MathProgBase.eval_jac_g(g::Genoud_MPB, J, x) = nothing
+                opt::Options = Genoud.Options(),
+                operator::Operators = Genoud.Operators())
+                    
+    g = Genoud_MPB(d)
     m = MathProgBase.NonlinearModel(solver)
-    MathProgBase.loadproblem!(m, length(d.last_x_f), 0, lvar, uvar, Float64[], Float64[], sense, Genoud_MPB())
+    MathProgBase.loadproblem!(m, length(d.last_x_f), 0, lvar, uvar, Float64[], Float64[], sense, g)
     MathProgBase.setwarmstart!(m, d.last_x_f)
-    genoud2(m, sizepop, Domain([lvar uvar]), optimize_best = true, kwargs...)
+
+    genoud2(m, sizepop, Domain([lvar uvar]), true, opt, operator)
     
 end
 
 function genoud(d::NonDifferentiable, 
-                sizepop::Int64, 
-                lvar::Vector, 
-                uvar::Vector; 
-                sense::Symbol = :Min, 
-                kwargs...)
+    sizepop::Int64, 
+    lvar::Vector, 
+    uvar::Vector;
+    sense::Symbol = :Min,
+    solver::MathProgBase.SolverInterface.AbstractMathProgSolver = Ipopt.IpoptSolver(print_level=0), 
+    opt::Options = Genoud.Options(),
+    operator::Operators = Genoud.Operators())
 
     MathProgBase.features_available(g::Genoud_MPB) = [:Grad]
     MathProgBase.eval_f(g::Genoud_MPB, x) = d.f(x)
     MathProgBase.eval_grad_f(g::Genoud_MPB, gr, x) = nothing
     MathProgBase.jac_structure(g::Genoud_MPB) = Int[],Int[]
     MathProgBase.eval_jac_g(g::Genoud_MPB, J, x) = nothing
-    m = MathProgBase.NonlinearModel(Ipopt.IpoptSolver())
+    m = MathProgBase.NonlinearModel(solver)
     MathProgBase.loadproblem!(m, length(d.initial_x), 0, lvar, uvar, Float64[], Float64[], sense, Genoud_MPB())
-    MathProgBase.setwarmstart!(m, d.initial_x)    
-    
-    genoud2(m, sizepop, Domain([lvar uvar]), optimize_best = false, kwargs...)
-
+    MathProgBase.setwarmstart!(m, d.initial_x)        
+    genoud2(m, sizepop, Domain([lvar uvar]), solver, true, opt, operator)
 end
 
 function genoud2(m::MathProgBase.SolverInterface.AbstractNonlinearModel, 
-    sizepop::Int64, domain;
-    optimize_best::Bool = true,
-    opt::Options = Genoud.Options(),
-    operator_o::Operators = Genoud.Operators())
+    sizepop::Int64, 
+    domain::Domain, 
+    optimize_best::Bool,
+    opt::Options,
+    operator::Operators)
     
     initial_x = m.warmstart
     #domain = Domain(MathProgBase.SolverInterface.getvarLB(m), MathProgBase.SolverInterface.getvarLB(m))
@@ -472,7 +485,7 @@ function genoud2(m::MathProgBase.SolverInterface.AbstractNonlinearModel,
     ## Number of parameters
     k = length(initial_x)
     ## Get splits for operator application
-    idx = splits(operator_o, sizepop, k)
+    idx = splits(operator, sizepop, k)
     ## Options
     f_tol = opt.f_tol
     g_tol = opt.g_tol
@@ -502,7 +515,7 @@ function genoud2(m::MathProgBase.SolverInterface.AbstractNonlinearModel,
     #=
     ## Print problem info
     =#
-    print_level > 0 && print_problem_info(operator_o, opt, sizepop, domain, sense)
+    print_level > 0 && print_problem_info(operator, opt, sizepop, domain, sense)
     #=
     ## Set generation
     =#
@@ -663,7 +676,7 @@ function genoud2(m::MathProgBase.SolverInterface.AbstractNonlinearModel,
     bestgen,
     sense,
     domain,
-    operator_o,
+    operator,
     opt)
 end
 
@@ -956,5 +969,5 @@ end
 
 bestindiv(g::Genoud.GenoudOutput) = g.bestindiv
 bestfitns(g::Genoud.GenoudOutput) = g.bestfitns
-bestgen(g::Genoud.GenoudOutput) = g.bestgen
+bestgen(g::Genoud.GenoudOutput)   = g.bestgen
 end  #module
