@@ -413,6 +413,8 @@ struct Genoud_MPB{T, F} <: MathProgBase.AbstractNLPEvaluator
 end
 
 Genoud_MPB(d::OnceDifferentiable) = Genoud_MPB(d.f, d.g!)
+Genoud_MPB(d::NonDifferentiable) = Genoud_MPB(d.f, identity)
+
 
 MathProgBase.features_available(g::Genoud_MPB) = [:Grad]
 function MathProgBase.initialize(d::Genoud_MPB, requested_features::Vector{Symbol})
@@ -456,15 +458,13 @@ function genoud(d::NonDifferentiable,
     opt::Options = Genoud.Options(),
     operator::Operators = Genoud.Operators())
 
-    MathProgBase.features_available(g::Genoud_MPB) = [:Grad]
-    MathProgBase.eval_f(g::Genoud_MPB, x) = d.f(x)
-    MathProgBase.eval_grad_f(g::Genoud_MPB, gr, x) = nothing
-    MathProgBase.jac_structure(g::Genoud_MPB) = Int[],Int[]
-    MathProgBase.eval_jac_g(g::Genoud_MPB, J, x) = nothing
+    g = Genoud_MPB(d)
     m = MathProgBase.NonlinearModel(solver)
-    MathProgBase.loadproblem!(m, length(d.initial_x), 0, lvar, uvar, Float64[], Float64[], sense, Genoud_MPB())
-    MathProgBase.setwarmstart!(m, d.initial_x)        
-    genoud2(m, sizepop, Domain([lvar uvar]), solver, true, opt, operator)
+    MathProgBase.loadproblem!(m, length(d.initial_x), 0, lvar, uvar, Float64[], Float64[], sense, g)
+    MathProgBase.setwarmstart!(m, d.initial_x)
+
+    genoud2(m, sizepop, Domain([lvar uvar]), false, opt, operator)
+
 end
 
 function genoud2(m::MathProgBase.SolverInterface.AbstractNonlinearModel, 
