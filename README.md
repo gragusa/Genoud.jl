@@ -4,7 +4,6 @@
 [![codecov.io](http://codecov.io/github/gragusa/Genoud.jl/coverage.svg?branch=master)](http://codecov.io/github/gragusa/Genoud.jl?branch=master)
 
 GENetic Optimization Using Derivative.
-
 ```julia
 using Genoud
 
@@ -15,11 +14,11 @@ function claw(xx)
  (7.0/300.0)*(normpdf(0.5,.07, x) + normpdf(1.0,.07, x) + normpdf(1.5,.07, x)))
 end
 
-## Not using derivatives
-out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimize_best = false)
-## Using derivatives (in this case finite diff derivatives)
-out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max)
-## Using derivatives (in this case automatic diff derivatives)
-out = Genoud.genoud(claw, [0.0], sizepop = 5000, sense = :Max, optimizer_o = Optim.Options(autodiff = true))
+## Using derivative information
+ga_diff = Genoud.genoud(OnceDifferentiable(claw, [0.0]), 5000, [-10.], [10.], sense = :Max)
+
+## Not using derivative information
+ga_nodiff = Genoud.genoud(OnceDifferentiable(claw, [0.0]), 5000, [-10.], [10.], sense = :Max)
+
 
 ```

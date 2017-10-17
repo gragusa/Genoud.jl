@@ -1,25 +1,25 @@
 __precompile__(true)
 module Genoud
-#using MathProgBase
-#using OptimMPB
 using Parameters
 using StatsFuns
 using StatsBase
-using Reexport
-@reexport using Optim
-import Optim: converged, f_converged, g_converged, f_tol, g_tol
+using OptimBase
+import OptimBase: converged, f_converged, g_converged, f_tol, g_tol
+using Optim
+using MathProgBase
+using Ipopt
 # package code goes here
 
 const rtol  = sqrt(eps(1.0))
 const FLOAT = eltype(1.0)
 
 const XNM = ["X₁", "X₂", "X₃", "X₄", "X₅", "X₆", "X₇", "X₈ ", "X₉", "X₁₀",
-             "X₁₁", "X₁₂", "X₁₃", "X₁₄", "X₁₅", "X₁₆", "X₁₇", "X₁₈ ", "X₁₉", "X₂₀",
-             "X₂₁", "X₂₂", "X₂₃", "X₂₄", "X₂₅", "X₂₆", "X₂₇", "X₂₈ ", "X₂₉", "X₃₀",
-             "X₃₁", "X₃₂", "X₃₃", "X₃₄", "X₃₅", "X₃₆", "X₃₇", "X₃₈ ", "X₃₉", "X₄₀",
-             "X₄₁", "X₄₂", "X₄₃", "X₄₄", "X₄₅", "X₄₆", "X₄₇", "X₄₈ ", "X₄₉", "X₅₀",
-             "X₅₁", "X₅₂", "X₅₃", "X₅₄", "X₅₅", "X₅₆", "X₅₇", "X₅₈ ", "X₅₉", "X₆₀",
-             "X₆₁", "X₆₂", "X₆₃", "X₆₄", "X₆₅", "X₆₆", "X₆₇", "X₆₈ ", "X₆₉", "X₇₀"]
+"X₁₁", "X₁₂", "X₁₃", "X₁₄", "X₁₅", "X₁₆", "X₁₇", "X₁₈ ", "X₁₉", "X₂₀",
+"X₂₁", "X₂₂", "X₂₃", "X₂₄", "X₂₅", "X₂₆", "X₂₇", "X₂₈ ", "X₂₉", "X₃₀",
+"X₃₁", "X₃₂", "X₃₃", "X₃₄", "X₃₅", "X₃₆", "X₃₇", "X₃₈ ", "X₃₉", "X₄₀",
+"X₄₁", "X₄₂", "X₄₃", "X₄₄", "X₄₅", "X₄₆", "X₄₇", "X₄₈ ", "X₄₉", "X₅₀",
+"X₅₁", "X₅₂", "X₅₃", "X₅₄", "X₅₅", "X₅₆", "X₅₇", "X₅₈ ", "X₅₉", "X₆₀",
+"X₆₁", "X₆₂", "X₆₃", "X₆₄", "X₆₅", "X₆₆", "X₆₇", "X₆₈ ", "X₆₉", "X₇₀"]
 
 ## Constant parameters
 const NUMBER_OF_TRIES_HC = 1000
@@ -56,8 +56,8 @@ Base.length(d::Domain) = size(d.m, 1)::Int64
 end
 
 @with_kw immutable Options{T, F, B}
-    max_generations::T = 100
-    wait_generations::T = 10
+#    max_generations::T = 100
+    #wait_generations::T = 10
     hard_generation_limit::B = true
     check_gradient::B = false
     f_tol::F = 0.001
@@ -70,7 +70,7 @@ end
     pmix::F = 0.5
     bmix::F = 6.0
     initial_selection::B = false
-    bfgs_iterations::T = 75
+#    bfgs_iterations::T = 75
 end
 
 type GenoudOutput
@@ -148,7 +148,7 @@ function nonuniform_mut!(x, bmix, d::Domain, generation, max_generations, bounda
     else
         x[j] = mx
     end
-        x
+    x
 end
 
 function polytope_cross(x, d::Domain)
@@ -185,31 +185,31 @@ function whole_mut!(x, bmix, d::Domain, generation, max_generations, boundary_en
             x[j] = mx
         end
     end
-        x
+    x
 end
 
 
 function heuristic_cross(x, d::Domain)
-  k = length(d)::Int64
-  z = Array{Float64}(k)
-  attempts = 0
-  while true
-    p = rand()
-    for s = 1:k
-      z[s] = p*(x[s,1]-x[s,2]) + x[s,1]
+    k = length(d)::Int64
+    z = Array{Float64}(k)
+    attempts = 0
+    while true
+        p = rand()
+        for s = 1:k
+            z[s] = p*(x[s,1]-x[s,2]) + x[s,1]
+        end
+        if z ∈ d
+            break
+        end
+        if attempts > NUMBER_OF_TRIES_HC
+            for s = 1:k
+                z[s] = (x[s, 1] + x[s, 2])/2
+            end
+            break
+        end
+        attempts += 1
     end
-    if z ∈ d
-      break
-    end
-    if attempts > NUMBER_OF_TRIES_HC
-      for s = 1:k
-        z[s] = (x[s, 1] + x[s, 2])/2
-      end
-      break
-    end
-    attempts += 1
-  end
-  z
+    z
 end
 
 function Base.Random.rand(d::Domain)
@@ -269,7 +269,7 @@ function mutation(population, fitness, smplidx, fitidx, idx, domains::Domain, ge
         end
         boundary_mut!(view(offspring, :, i), domains)
     end
-
+    
     ## Non uniform mutation
     for i in idx[3]+1:idx[4]
         for j = 1:k
@@ -304,7 +304,7 @@ function mutation(population, fitness, smplidx, fitidx, idx, domains::Domain, ge
         end
         whole_mut!(view(offspring, :, i), bmix, domains, generation, max_generations, boundary_enforcement)
     end
-
+    
     ## Heuristic mutation
     for i in idx[7]+1:idx[8]
         offspring[:,i] = heuristic_cross(view(population, :, i:i+1), domains)
@@ -312,13 +312,13 @@ function mutation(population, fitness, smplidx, fitidx, idx, domains::Domain, ge
     return offspring
 end
 
-function print_problem_info(op, opts, sizepop, d, sense)
+function print_problem_info(op, opts, sizepop, d, sense, wait_generations, max_generations)
     k = length(d)
     println("Domains:")
     for j in 1:k
         println(d.m[j,1], " <= ", "X", j, " <=", d.m[j,2])
     end
-
+    
     opnames = ["Cloning...........................  ",
     "Uniform mutation..................  ",
     "Boundary mutation.................  ",
@@ -334,8 +334,8 @@ function print_problem_info(op, opts, sizepop, d, sense)
     end
     println("")
     println("Population size.....................:  ", sizepop)
-    println("Hard maximum number of generation...:  ", opts.hard_generation_limit)
-    println("Maximum nonchanging generations.....:  ", opts.wait_generations)
+    println("Maximum number of generation........:  ", max_generations, ifelse(opts.hard_generation_limit, " (HARD)", ""))
+    println("Maximum nonchanging generations.....:  ", wait_generations)
     println("Convergence tolerance...............:  ", opts.f_tol)
     println("")
     if sense == :Max
@@ -371,13 +371,13 @@ function splits(op::Operators, sizepop, k)
     ## Oprator that need positive population
     op_split[6] = isodd(op_split[6]) ? (op_split[1] -= 1; op_split[6] + 1) : op_split[6]
     op_split[8] = isodd(op_split[8]) ? (op_split[1] -= 1; op_split[8] + 1) : op_split[8]
-
+    
     if op_split[5] != 1
         r = k-rem(op_split[5]÷k, k)
         op_split[5] += r
         op_split[1] -= r
     end
-
+    
     sum_split = sum(op_split)
     if sum_split == sizepop
         op_split[1] -= 1
@@ -395,47 +395,114 @@ function _describe(x)
 end
 
 
-function genoud(fcn, initial_x::Array{Float64, 1};
-    sizepop::Int = 5000, sense::Symbol = :Min,
-    domain::Domain = Domain(initial_x),
-    optimize_best::Bool = true, gr!::Function = identity,
-    optimizer::Optim.Optimizer = Optim.BFGS(),
-    opt::Options = Genoud.Options(),
-    operator_o::Operators = Genoud.Operators(),
-    optimizer_o::Optim.Options = Optim.Options())
+# mutable struct NonDifferentiable <: NLSolversBase.AbstractObjective
+#     f::Function
+#     initial_x::Array{Float64, 1}
+# end
 
+#NonDifferentiable(f::Function, initial_x::Vector) = NonDifferentiable(f, float(initial_x))
+
+
+
+struct Genoud_MPB{T, F} <: MathProgBase.AbstractNLPEvaluator 
+    f::T
+    g!::F
+end
+
+Genoud_MPB(d::Optim.OnceDifferentiable) = Genoud_MPB(d.f, d.g!)
+Genoud_MPB(d::Optim.NonDifferentiable) = Genoud_MPB(d.f, identity)
+
+
+MathProgBase.features_available(g::Genoud_MPB) = [:Grad]
+function MathProgBase.initialize(d::Genoud_MPB, requested_features::Vector{Symbol})
+    for feat in requested_features
+        if !(feat in [:Grad])
+            error("Unsupported feature $feat")
+        end
+    end
+end 
+MathProgBase.jac_structure(g::Genoud_MPB) = Int[],Int[]
+MathProgBase.eval_jac_g(g::Genoud_MPB, J, x) = nothing
+MathProgBase.eval_f(g::Genoud_MPB, x) = g.f(x)
+MathProgBase.eval_grad_f(g::Genoud_MPB, gr, x) = g.g!(gr, x)    
+
+genoud(d::NLSolversBase.AbstractObjective, sizepop::Int64, domain::Domain; kwargs...) = genoud(d, sizepop, domain.m[:,1], domain.m[:,2]; kwargs...)
+
+function genoud(d::Optim.OnceDifferentiable, 
+                sizepop::Int64, 
+                lvar::Vector, 
+                uvar::Vector;
+                max_generations::Int64  = 100,
+                wait_generations::Int64 = 10,
+                sense::Symbol = :Min,
+                solver::MathProgBase.SolverInterface.AbstractMathProgSolver = Ipopt.IpoptSolver(print_level=0), 
+                opt::Options = Genoud.Options(),
+                operator::Operators = Genoud.Operators())
+                    
+    g = Genoud_MPB(d)
+    m = MathProgBase.NonlinearModel(solver)
+    MathProgBase.loadproblem!(m, length(d.last_x_f), 0, lvar, uvar, Float64[], Float64[], sense, g)
+    MathProgBase.setwarmstart!(m, d.last_x_f)
+
+    genoud2(m, sizepop, Domain([lvar uvar]), true, max_generations, wait_generations, opt, operator)
+    
+end
+
+function genoud(d::Optim.NonDifferentiable, 
+    sizepop::Int64, 
+    lvar::Vector, 
+    uvar::Vector;
+    max_generations::Int64  = 100,
+    wait_generations::Int64 = 10,
+    sense::Symbol = :Min,
+    solver::MathProgBase.SolverInterface.AbstractMathProgSolver = Ipopt.IpoptSolver(print_level=0), 
+    opt::Options = Genoud.Options(),
+    operator::Operators = Genoud.Operators())
+    g = Genoud_MPB(d)
+    m = MathProgBase.NonlinearModel(solver)
+    MathProgBase.loadproblem!(m, length(d.last_x_f), 0, lvar, uvar, Float64[], Float64[], sense, g)
+    MathProgBase.setwarmstart!(m, d.last_x_f)
+    genoud2(m, sizepop, Domain([lvar uvar]), false, max_generations, wait_generations, opt, operator)
+end
+
+function genoud2(m::MathProgBase.SolverInterface.AbstractNonlinearModel, 
+    sizepop::Int64, 
+    domain::Domain, 
+    optimize_best::Bool,
+    max_generations::Int64,
+    wait_generations::Int64,
+    opt::Options,
+    operator::Operators)
+    
+    initial_x = m.warmstart
+    #domain = Domain(MathProgBase.SolverInterface.getvarLB(m), MathProgBase.SolverInterface.getvarLB(m))
+    func = m.inner.eval_f
+    sense = m.inner.sense
+    σ = sense == :Min ? 1  : -1
     ## Check
     checkdomain(domain, initial_x)
-
+    
     ## Number of parameters
-    k = length(domain)
+    k = length(initial_x)
     ## Get splits for operator application
-    idx = splits(operator_o, sizepop, k)
+    idx = splits(operator, sizepop, k)
     ## Options
     f_tol = opt.f_tol
     g_tol = opt.g_tol
-    max_generations = opt.max_generations
+    #max_generations = opt.max_generations
+    #wait_generations = opt.wait_generations
+    boundary_enforcement = opt.boundary_enforcement
     hard_generation_limit = opt.hard_generation_limit
-    wait_generations = opt.wait_generations
+    
     optim_burnin = opt.optim_burnin
     print_level = opt.print_level
-    boundary_enforcement = opt.boundary_enforcement
+    
     initial_selection = opt.initial_selection
     check_gradient = opt.check_gradient
     bmix = opt.bmix::Float64
     pmix = opt.pmix::Float64
     ## Set the solver
-    σ = sense == :Min ? 1  : -1
-    func(x) = σ*fcn(x)
-
-    function grad!(x, stor)
-            gr!(x, stor)
-            scale!(stor, σ)
-            stor
-    end
-
-    analytic_deriv = isa(gr!, typeof(Base.identity)) ? false : true
-
+    
     # Initialize population
     population  = initialpopulation(domain, sizepop)  ## (k × sizepop)
     offspring   = similar(population)                  ##
@@ -450,7 +517,7 @@ function genoud(fcn, initial_x::Array{Float64, 1};
     #=
     ## Print problem info
     =#
-    print_level > 0 && print_problem_info(operator_o, opt, sizepop, domain, sense)
+    print_level > 0 && print_problem_info(operator, opt, sizepop, domain, sense, wait_generations, max_generations)
     #=
     ## Set generation
     =#
@@ -481,30 +548,30 @@ function genoud(fcn, initial_x::Array{Float64, 1};
     bestindiv =  population[:, idxmin]
     xvals = [bestindiv]
     fvals = [bestfitns]
-
+    
     if check_gradient
-        gr!(bestindiv, grx)
+        m.inner.gr!(grx, bestindiv)
         gtols = [sumabs(grx)]
     else
         gtols = Array{Float64}(0)
     end
-
+    
     DEBUG && println("\n Best individual:\n")
     DEBUG && Base.show(bestindiv)
     DEBUG && println("Best fitness:\n")
     DEBUG && show(bestfitns)
     DEBUG && check_gradient && println("Gradient:\n")
     DEBUG && check_gradient && show(bestfitns)
-
+    
     print_level >0 && print_generation_info(generation, fitness, population, bestindiv, bestfitns, print_level, σ)
-
+    
     while true
         #=
         Mutate population
         =#
         population = mutation(population, fitness, smplidx, fitidx, idx,
-                              domain, generation, max_generations,
-                              boundary_enforcement, bmix)
+        domain, generation, max_generations,
+        boundary_enforcement, bmix)
         #=
         Calculate fitness
         =#
@@ -518,7 +585,7 @@ function genoud(fcn, initial_x::Array{Float64, 1};
         StatsBase.competerank!(fitidx, fitness, permidx)
         current_bestfitns, minidx = findmin(fitness)
         current_bestindiv =  population[:, minidx]
-
+        
         generation += 1
         #=
         Apply solver to best individual of mutated population
@@ -527,31 +594,14 @@ function genoud(fcn, initial_x::Array{Float64, 1};
             try
                 DEBUG && println("Running BFGS on:\n")
                 DEBUG && show(current_bestindiv)
-                if boundary_enforcement
-                    if analytic_deriv
-                        out = Optim.optimize(OnceDifferentiable(func, grad!), vec(current_bestindiv),
-                        domain.m[:,1], domain.m[:,2], Fminbox(), optimizer = LBFGS,
-                        optimizer_o = optimizer_o)
-                    else
-                        out = Optim.optimize(OnceDifferentiable(func), vec(current_bestindiv), domain.m[:,1], domain.m[:,2],
-                        Fminbox(), optimizer = LBFGS, optimizer_o = optimizer_o)
-                    end
-
-                else
-                    if analytic_deriv
-                        out = Optim.optimize(func, grad!, vec(current_bestindiv), optimizer, optimizer_o)
-                    else
-                        out = Optim.optimize(func, vec(current_bestindiv), optimizer, optimizer_o)
-                    end
-                end
+                MathProgBase.setwarmstart!(m, current_bestindiv)
+                MathProgBase.optimize!(m)
                 DEBUG && println("SOLVER OUTPUT")
-                DEBUG && show(out)
-
-                # population[:,end] = out.minimum
-                # fitness[end] = out.f_minimum
-                if out.minimum < current_bestfitns
-                    current_bestindiv = copy(out.minimizer)
-                    current_bestfitns = out.minimum
+                DEBUG && show(m)                
+                solutions = MathProgBase.SolverInterface.getobjval(m)
+                if solutions < current_bestfitns
+                    current_bestindiv = copy(MathProgBase.SolverInterface.getsolution(m))
+                    current_bestfitns = solutions
                 end
             catch exception
                 DEBUG && (println("SOLVER FAILED WITH:\n"); println(exception))
@@ -567,7 +617,7 @@ function genoud(fcn, initial_x::Array{Float64, 1};
         =#
         ftol = abs(current_bestfitns - bestfitns)/abs(bestfitns)
         if check_gradient
-            gr!(current_bestindiv, grx)
+            m.inner.eval_grad_f(grx, current_bestindiv)            
             gtol = sumabs(grx)
             push!(gtols, gtol)
         end
@@ -591,7 +641,7 @@ function genoud(fcn, initial_x::Array{Float64, 1};
                 break
             end
         end
-
+        
         if generation > max_generations
             break
         elseif generation == max_generations
@@ -603,7 +653,7 @@ function genoud(fcn, initial_x::Array{Float64, 1};
                 generation += 10
             end
         end
-
+        
         ## Resample population
         sortperm!(permidx, fitness, rev = false)
         StatsBase.competerank!(fitidx, fitness, permidx)
@@ -615,7 +665,7 @@ function genoud(fcn, initial_x::Array{Float64, 1};
         =#
         population[:, 1] = bestindiv
         fitness[1] = bestfitns
-
+        
     end
     bestgen = findmin(fvals)[2]-1
     GenoudOutput(bestindiv,
@@ -628,17 +678,256 @@ function genoud(fcn, initial_x::Array{Float64, 1};
     bestgen,
     sense,
     domain,
-    operator_o,
+    operator,
     opt)
 end
 
-Optim.f_converged(r::GenoudOutput) = last(r.ftols) <= r.opts.f_tol
-Optim.g_converged(r::GenoudOutput) = last(r.gtols) <= r.opts.g_tol
 
-Optim.f_tol(r::GenoudOutput) = r.opts.f_tol
-Optim.g_tol(r::GenoudOutput) = r.opts.f_tol
 
-function Optim.converged(r::GenoudOutput)
+# function genoud(fcn, initial_x::Array{Float64, 1};
+#     sizepop::Int = 5000, sense::Symbol = :Min,
+#     domain::Domain = Domain(initial_x),
+#     optimize_best::Bool = true, gr!::Function = identity,
+#     optimizer::Optim.Optimizer = Optim.BFGS(),
+#     opt::Options = Genoud.Options(),
+#     operator_o::Operators = Genoud.Operators(),
+#     optimizer_o::Optim.Options = Optim.Options())
+    
+#     ## Check
+#     checkdomain(domain, initial_x)
+    
+#     ## Number of parameters
+#     k = length(domain)
+#     ## Get splits for operator application
+#     idx = splits(operator_o, sizepop, k)
+#     ## Options
+#     f_tol = opt.f_tol
+#     g_tol = opt.g_tol
+#     max_generations = opt.max_generations
+#     hard_generation_limit = opt.hard_generation_limit
+#     wait_generations = opt.wait_generations
+#     optim_burnin = opt.optim_burnin
+#     print_level = opt.print_level
+#     boundary_enforcement = opt.boundary_enforcement
+#     initial_selection = opt.initial_selection
+#     check_gradient = opt.check_gradient
+#     bmix = opt.bmix::Float64
+#     pmix = opt.pmix::Float64
+#     ## Set the solver
+#     σ = sense == :Min ? 1  : -1
+#     func(x) = σ*fcn(x)
+    
+#     function grad!(stor, x)
+#         gr!(stor, x)
+#         scale!(stor, σ)
+#         stor
+#     end
+    
+#     #analytic_deriv = isa(gr!, typeof(Base.identity)) ? false : true
+    
+#     # Initialize population
+#     population  = initialpopulation(domain, sizepop)  ## (k × sizepop)
+#     offspring   = similar(population)                  ##
+#     fitness     = zeros(sizepop)                       ## Need to experiment with pmap
+#     smplidx     = collect(1:sizepop)
+#     #=
+#     ## Initialize storages
+#     =#
+#     ftols = [0.0]
+#     gtol  = 0.0
+#     grx   = Array{Float64}(k)
+#     #=
+#     ## Print problem info
+#     =#
+#     print_level > 0 && print_problem_info(operator_o, opt, sizepop, domain, sense)
+#     #=
+#     ## Set generation
+#     =#
+#     generation = 0
+#     #=
+#     ## Calculate initial fitness value
+#     =#
+#     for i in 1:sizepop
+#         fitness[i] = func(population[:,i])
+#     end
+#     fitidx = StatsBase.competerank(fitness)
+#     permidx = sortperm(fitidx)
+#     #=
+#     ## Resample population
+#     =#
+#     smplprob = Array{Float64}(sizepop)
+#     if initial_selection
+#         smplprob .= pmix.*((1-pmix).^(fitidx-1))
+#         sample!(1:sizepop, Weights(smplprob), smplidx)
+#         population = population[:, smplidx]
+#         fitness = fitness[smplidx]
+#         DEBUG && Base.show(_describe(smplprob))
+#     end
+#     #=
+#     ## Best individual
+#     =#
+#     bestfitns, idxmin = findmin(fitness)
+#     bestindiv =  population[:, idxmin]
+#     xvals = [bestindiv]
+#     fvals = [bestfitns]
+    
+#     if check_gradient
+#         gr!(bestindiv, grx)
+#         gtols = [sumabs(grx)]
+#     else
+#         gtols = Array{Float64}(0)
+#     end
+    
+#     DEBUG && println("\n Best individual:\n")
+#     DEBUG && Base.show(bestindiv)
+#     DEBUG && println("Best fitness:\n")
+#     DEBUG && show(bestfitns)
+#     DEBUG && check_gradient && println("Gradient:\n")
+#     DEBUG && check_gradient && show(bestfitns)
+    
+#     print_level >0 && print_generation_info(generation, fitness, population, bestindiv, bestfitns, print_level, σ)
+    
+#     while true
+#         #=
+#         Mutate population
+#         =#
+#         population = mutation(population, fitness, smplidx, fitidx, idx,
+#         domain, generation, max_generations,
+#         boundary_enforcement, bmix)
+#         #=
+#         Calculate fitness
+#         =#
+#         for i in 1:sizepop
+#             fitness[i] = func(population[:,i])
+#         end
+#         #=
+#         Rank fitness and get best individuals
+#         =#
+#         sortperm!(permidx, fitness, rev = false)
+#         StatsBase.competerank!(fitidx, fitness, permidx)
+#         current_bestfitns, minidx = findmin(fitness)
+#         current_bestindiv =  population[:, minidx]
+        
+#         generation += 1
+#         #=
+#         Apply solver to best individual of mutated population
+#         =#
+#         if optim_burnin < generation + 1 && optimize_best
+#             try
+#                 DEBUG && println("Running BFGS on:\n")
+#                 DEBUG && show(current_bestindiv)
+#                 if boundary_enforcement
+#                     if analytic_deriv
+#                         out = Optim.optimize(OnceDifferentiable(func, grad!), vec(current_bestindiv),
+#                         domain.m[:,1], domain.m[:,2], Fminbox(), optimizer = LBFGS,
+#                         optimizer_o = optimizer_o)
+#                     else
+#                         out = Optim.optimize(OnceDifferentiable(func), vec(current_bestindiv), domain.m[:,1], domain.m[:,2],
+#                         Fminbox(), optimizer = LBFGS, optimizer_o = optimizer_o)
+#                     end
+                    
+#                 else
+#                     if analytic_deriv
+#                         out = Optim.optimize(func, grad!, vec(current_bestindiv), optimizer, optimizer_o)
+#                     else
+#                         out = Optim.optimize(func, vec(current_bestindiv), optimizer, optimizer_o)
+#                     end
+#                 end
+#                 DEBUG && println("SOLVER OUTPUT")
+#                 DEBUG && show(out)
+                
+#                 # population[:,end] = out.minimum
+#                 # fitness[end] = out.f_minimum
+#                 if out.minimum < current_bestfitns
+#                     current_bestindiv = copy(out.minimizer)
+#                     current_bestfitns = out.minimum
+#                 end
+#             catch exception
+#                 DEBUG && (println("SOLVER FAILED WITH:\n"); println(exception))
+#                 print_level > 0 && print_with_color(:red, "Solver on best individual failed\n")
+#             end
+#         end
+#         #=
+#         Print info
+#         =#
+#         print_level > 0 && print_generation_info(generation, fitness, population, bestindiv, bestfitns, print_level, σ)
+#         #=
+#         Calculate tolarances
+#         =#
+#         ftol = abs(current_bestfitns - bestfitns)/abs(bestfitns)
+#         if check_gradient
+#             gr!(current_bestindiv, grx)
+#             gtol = sumabs(grx)
+#             push!(gtols, gtol)
+#         end
+#         #=
+#         ## Store tolerance level
+#         =#
+#         push!(fvals, bestfitns)
+#         push!(xvals, bestindiv)
+#         push!(ftols, ftol)
+#         check_gradient && push!(gtols, gtol)
+#         #=
+#         ## Copy current to actual
+#         =#
+#         bestfitns = copy(current_bestfitns)
+#         bestindiv = copy(current_bestindiv)
+#         #=
+#         Check exit conditions
+#         =#
+#         if ftol <= f_tol && gtol <= g_tol
+#             if length(fvals) >= wait_generations && maximum(abs.(fvals[end-wait_generations+2:end] - fvals[end-wait_generations+1])) <= f_tol^2
+#                 break
+#             end
+#         end
+        
+#         if generation > max_generations
+#             break
+#         elseif generation == max_generations
+#             if hard_generation_limit
+#                 print_level > 1 && warn("Number of max generation limit reached, but the fitness value is still changing")
+#                 break
+#             else
+#                 print_level > 1 && warn("Number of max generation limit reached, increasing max number of generation from "*string(max_generations)*" to "*string(max_generations+10))
+#                 generation += 10
+#             end
+#         end
+        
+#         ## Resample population
+#         sortperm!(permidx, fitness, rev = false)
+#         StatsBase.competerank!(fitidx, fitness, permidx)
+#         smplprob .= pmix.*((1-pmix).^(fitidx-1))
+#         sample!(1:sizepop, Weights(smplprob), smplidx)
+#         population = population[:, smplidx]
+#         #=
+#         Carry over best of previous generation
+#         =#
+#         population[:, 1] = bestindiv
+#         fitness[1] = bestfitns
+        
+#     end
+#     bestgen = findmin(fvals)[2]-1
+#     GenoudOutput(bestindiv,
+#     σ*bestfitns,
+#     σ.*fvals,
+#     xvals,
+#     ftols,
+#     gtols,
+#     grx,
+#     bestgen,
+#     sense,
+#     domain,
+#     operator_o,
+#     opt)
+# end
+
+OptimBase.f_converged(r::GenoudOutput) = last(r.ftols) <= r.opts.f_tol
+OptimBase.g_converged(r::GenoudOutput) = last(r.gtols) <= r.opts.g_tol
+
+OptimBase.f_tol(r::GenoudOutput) = r.opts.f_tol
+OptimBase.g_tol(r::GenoudOutput) = r.opts.f_tol
+
+function OptimBase.converged(r::GenoudOutput)
     f_converged(r) || r.opts.check_gradient && last(r.gtols) <= r.opts.g_tol
 end
 
@@ -662,7 +951,7 @@ function Base.show(io::IO, r::GenoudOutput)
         end
         @printf io " * Maximum: %e\n" r.bestfitns
     end
-
+    
     @printf io " * Pick generation: %d\n" r.bestgen
     @printf io " * Convergence: %s\n" converged(r)
     @printf io "   * |f(x) - f(x')| / |f(x)| < %.1e: %s\n" f_tol(r) f_converged(r)
@@ -681,5 +970,7 @@ end
 
 bestindiv(g::Genoud.GenoudOutput) = g.bestindiv
 bestfitns(g::Genoud.GenoudOutput) = g.bestfitns
-bestgen(g::Genoud.GenoudOutput) = g.bestgen
+bestgen(g::Genoud.GenoudOutput)   = g.bestgen
+
+export genoud, OnceDifferentiable, NonDifferentiable
 end  #module
