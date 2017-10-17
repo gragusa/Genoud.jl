@@ -3,6 +3,7 @@ StatsFuns
 StatsBase
 Parameters
 NLSolversBase
+Optim
 OptimBase
 MathProgBase
 Ipopt
