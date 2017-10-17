@@ -2,7 +2,7 @@ julia 0.6.0
 StatsFuns
 StatsBase
 Parameters
-Reexport
 NLSolversBase
+OptimBase
 MathProgBase
 Ipopt
