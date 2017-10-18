@@ -17,13 +17,13 @@ out3 = Genoud.genoud(OnceDifferentiable(claw, [0.0]), 5000, [-10.], [10.], sense
 out4 = Genoud.genoud(NonDifferentiable(claw, [0.0]), 5000, [-10.], [10.], sense = :Max, max_generations = 12, wait_generations = 5)   
 
 
-@test Genoud.bestindiv(out1) ≈ Genoud.bestindiv(out2)
-@test Genoud.bestindiv(out2) ≈ Genoud.bestindiv(out3)
-@test Genoud.bestindiv(out3) ≈ Genoud.bestindiv(out4)
+@test Genoud.bestindiv(out1) ≈ Genoud.bestindiv(out2) atol=0.001
+@test Genoud.bestindiv(out2) ≈ Genoud.bestindiv(out3) atol=0.001
+@test Genoud.bestindiv(out3) ≈ Genoud.bestindiv(out4) atol=0.001
 
 @test isa(Genoud.bestgen(out1), Int64)
 @test isa(Genoud.bestgen(out2), Int64)
 
-@test Genoud.bestfitns(out1) ≈ Genoud.bestfitns(out2)
-@test Genoud.bestfitns(out2) ≈ Genoud.bestfitns(out3)
-@test Genoud.bestfitns(out3) ≈ Genoud.bestfitns(out4)
+@test Genoud.bestfitns(out1) ≈ Genoud.bestfitns(out2) atol=0.001
+@test Genoud.bestfitns(out2) ≈ Genoud.bestfitns(out3) atol=0.001
+@test Genoud.bestfitns(out3) ≈ Genoud.bestfitns(out4) atol=0.001
