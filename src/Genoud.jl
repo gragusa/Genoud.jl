@@ -25,7 +25,7 @@ const XNM = ["X₁", "X₂", "X₃", "X₄", "X₅", "X₆", "X₇", "X₈ ", "X
 const NUMBER_OF_TRIES_HC = 1000
 const DEBUG = false
 
-immutable Domain
+struct Domain
     m::Array{Float64, 2}
     p::Array{Float64, 2}   ## Padding for boundary mutation
 end
@@ -43,7 +43,7 @@ end
 
 Base.length(d::Domain) = size(d.m, 1)::Int64
 
-@with_kw immutable Operators{T}
+@with_kw struct Operators{T}
     cloning::T = 50
     uniform_mut::T = 50
     boundary_mut::T = 50
@@ -55,7 +55,7 @@ Base.length(d::Domain) = size(d.m, 1)::Int64
     localmin_cross::T = 0
 end
 
-@with_kw immutable Options{T, F, B}
+@with_kw struct Options{T, F, B}
 #    max_generations::T = 100
     #wait_generations::T = 10
     hard_generation_limit::B = true
@@ -73,7 +73,7 @@ end
 #    bfgs_iterations::T = 75
 end
 
-type GenoudOutput
+mutable struct GenoudOutput
     bestindiv
     bestfitns
     fvals
