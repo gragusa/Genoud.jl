@@ -1,9 +1,0 @@
-julia 0.6.0
-StatsFuns
-StatsBase
-Parameters
-NLSolversBase
-Optim
-OptimBase
-MathProgBase
-Ipopt

@@ -3,6 +3,10 @@
 # Evolutionary Programming Made Faster
 # IEEE TRANSACTIONS ON EVOLUTIONARY COMPUTATION, VOL. 3, NO. 2, JULY 1999
 
+using LinearAlgebra
+using Printf
+using Statistics
+
 a1 = [-32, -16, 0, 16, 32, -32, -16, 0, 16, 32, -32, -16,
       0, 16, 32, -32, -16, 0, 16, 32, -32, -16, 0, 16, 32]
 
@@ -14,7 +18,7 @@ const a = [a1 a2]'
 const α = [0.1957, 0.1947, 0.1735, 0.1600, 0.0844, 0.0627,
            0.0456, 0.0342, 0.0323, 0.0235, 0.0246]
 
-const β = 1./[0.25, 0.5, 1, 2, 4, 6, 8, 10, 12, 14, 16]
+const β = 1.0./[0.25, 0.5, 1, 2, 4, 6, 8, 10, 12, 14, 16]
 
 
 const ι = [1, 1.2, 3, 3.2]
@@ -74,7 +78,7 @@ end
                   k = length(x) - 1
                   sum(map(i -> 100*(x[i+1]-x[i]^2)^2 + (x[i]-1)^2, 1:k))
                 end,
-                x -> sum(floor.(x+0.5).^2),
+                x -> sum(floor.(x.+0.5).^2),
                 x -> begin
                   k = length(x)
                   sum(collect(1:k).*x.^4)
@@ -85,11 +89,11 @@ end
                 end,
                 x -> begin
                   k = length(x)
-                  sum(- 10.*cos.(2*π*x) + 10 + x.^2 )
+                  sum(- 10.0.*cos.(2*π.*x) .+ 10 .+ x.^2 )
                 end,
                 x -> begin
                   k = length(x) 
-                  -20*exp(-0.2*√(sum(abs2, x)/k)) - exp(mean(cos.(2*π.*x))) + 20 + e
+                  -20*exp(-0.2*√(sum(abs2, x)/k)) - exp(mean(cos.(2*π.*x))) + 20 + ℯ
                 end,
                 x -> begin
                   k = length(x)
@@ -110,7 +114,7 @@ end
                       sum(map(z -> ifelse(z>5, 100*(z-5)^4, ifelse(z>=-5, 0, 100*(-z-5)^4)), x))
                 end,
                 x -> begin
-                  1/(1/500 + sum(1./(collect(1:25) + sum((x.-a).^6, 1)')))
+                  1/(1/500 + sum(1.0./(collect(1:25) .+ sum((x.-a).^6; dims = 1)')))
                 end,
                 x -> sum(map(i -> (α[i] - x[1]*(β[i]^2+β[i]*x[2])/(β[i]^2+β[i]*x[3]+x[4]))^2, 1:11)),
                 x -> 4*(x[1]^2 - x[2]^2 + x[2]^4) - 2.1*x[1]^4 + x[1]^6/3 + x[1]*x[2],
@@ -175,7 +179,7 @@ names_testfuns = ("Sphere model",
                   "Shekel’s Family (m=7)",
                   "Shekel’s Family (m=10)")
 
-funs = Array{Dict{Symbol, Any}}(0)
+funs = Array{Dict{Symbol, Any}}(undef, 0)
 for i in 1:23
     push!(funs, Dict(:fname => names_testfuns[i],
                     :f => testfuns[i],
@@ -189,12 +193,12 @@ end
 
 for j in 1:23
   f = funs[j]
-  print_with_color(:cyan, string(j)*" "*f[:fname]*"\n")
+  printstyled(string(j)*" "*f[:fname]*"\n", color = :cyan)
   x0 = f[:solutions]
   f0 = f[:minima]
   if isa(x0, Tuple)
     println("Function with multiple minima")
-    print_with_color(:bold, "Minimum: "*string(f0)*"\n")
+    printstyled("Minimum: "*string(f0)*"\n"; color = :bold)
     for h in 1:length(x0)
       tx0 = x0[h]
       lx0 = length(tx0)
@@ -203,16 +207,17 @@ for j in 1:23
       else
         @printf "Minimizer: [%s,...,%s] -> f(x0) = %s \n" join(tx0[1:2], ",") join(tx0, ",") testfuns[j](tx0)
       end
-      isapprox(1+testfuns[j](tx0), 1+f0, rtol = 0.01) && print_with_color(:bold, "Correct"*"\n")
+      isapprox(1+testfuns[j](tx0), 1+f0, rtol = 0.01) && printstyled("Correct"*"\n"; color = :bold)
     end
   else
-    print_with_color(:bold, "Minimum: "*string(f0)*"\n")
+    printstyled("Minimum: "*string(f0)*"\n"; color = :bold)
     lx0 = length(x0)
     if lx0 > 5
       @printf "Minimizer: [%s,...,%s] -> f(x0) = %s\n" join(x0[1:2], ",") join(x0[lx0], ",") testfuns[j](x0)
     else
       @printf "Minimizer: [%s,...,%s] -> f(x0) = %s\n" join(x0[1:2], ",") join(x0, ",") testfuns[j](x0)
     end
-    isapprox(1+testfuns[j](x0), 1+f0, rtol = 0.01) && print_with_color(:bold, "Correct"*"\n")
+    isapprox(1+testfuns[j](x0), 1+f0, rtol = 0.01) && printstyled("Correct"*"\n"; color = :bold)
   end
 end
+
